@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>售后数据分析后台</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="i18n.js"></script>
+<style>
+:root {
+  --primary: #1F4E79;
+  --primary-light: #2E75B6;
+  --bg: #f0f4f8;
+  --card-bg: #fff;
+  --border: #e0e6ed;
+  --text: #2d3748;
+  --text-light: #718096;
+  --success: #38a169;
+  --danger: #e53e3e;
+  --warn: #dd6b20;
+  --shadow: 0 2px 8px rgba(0,0,0,0.08);
+  --radius: 10px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+.header { background: linear-gradient(135deg, var(--primary), var(--primary-light)); color: #fff; padding: 16px 32px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 12px rgba(0,0,0,0.15); position: sticky; top: 0; z-index: 100; }
+.header h1 { font-size: 20px; font-weight: 600; letter-spacing: 1px; }
+.header .subtitle { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+
+.sticky-tabs { position: sticky; top: 69px; z-index: 99; background: var(--bg); padding: 10px 0 0; }
+.sticky-tabs-inner { max-width: 1400px; margin: 0 auto; padding: 0 24px; }
+.container { max-width: 1400px; margin: 0 auto; padding: 0 24px 24px; }
+
+.tabs { display: flex; gap: 4px; margin-bottom: 0; background: var(--card-bg); border-radius: var(--radius); padding: 4px; box-shadow: var(--shadow); }
+.tab-btn { flex: 1; padding: 12px 24px; border: none; background: transparent; cursor: pointer; font-size: 14px; font-weight: 500; color: var(--text-light); border-radius: 8px; transition: all .2s; }
+.tab-btn.active { background: var(--primary); color: #fff; }
+.tab-btn:hover:not(.active) { background: #edf2f7; }
+
+.card { background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--shadow); padding: 24px; margin-bottom: 20px; }
+.card-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: var(--primary); border-left: 4px solid var(--primary); padding-left: 12px; }
+
+.upload-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 48px; text-align: center; cursor: pointer; transition: all .2s; }
+.upload-zone:hover, .upload-zone.dragover { border-color: var(--primary-light); background: #f7fafc; }
+.upload-zone .icon { font-size: 48px; margin-bottom: 12px; }
+.upload-zone p { color: var(--text-light); font-size: 14px; }
+.upload-zone .hint { font-size: 12px; color: #a0aec0; margin-top: 8px; }
+
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all .2s; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-light); }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-danger:hover { background: #c53030; }
+.btn-success { background: var(--success); color: #fff; }
+.btn-outline { background: #fff; color: var(--primary); border: 1px solid var(--primary); }
+.btn-outline:hover { background: #edf2f7; }
+.btn-sm { padding: 4px 12px; font-size: 12px; }
+
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: var(--card-bg); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); text-align: center; }
+.stat-card .value { font-size: 28px; font-weight: 700; color: var(--primary); }
+.stat-card .label { font-size: 13px; color: var(--text-light); margin-top: 4px; }
+
+.section { margin-bottom: 32px; }
+.section h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: var(--primary); }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 10px 12px; text-align: center; border-bottom: 1px solid var(--border); }
+th { background: var(--primary); color: #fff; font-weight: 500; white-space: nowrap; }
+tr:hover td { background: #f7fafc; }
+tbody tr:last-child td { font-weight: 600; }
+
+.chart-container { position: relative; height: 320px; margin-bottom: 20px; }
+.charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+.month-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.month-card { background: var(--card-bg); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); display: flex; justify-content: space-between; align-items: center; }
+.month-card .info h4 { font-size: 15px; color: var(--primary); }
+.month-card .info .meta { font-size: 12px; color: var(--text-light); margin-top: 4px; }
+.month-card .actions { display: flex; gap: 8px; }
+
+.nested-model { background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+.nested-model h4 { font-size: 14px; color: var(--primary); margin-bottom: 8px; }
+.nested-model table { margin-top: 8px; }
+.nested-model th { background: var(--primary-light); }
+
+.empty-state { text-align: center; padding: 60px; color: var(--text-light); }
+.empty-state .icon { font-size: 64px; margin-bottom: 16px; }
+
+.loading { display: flex; align-items: center; justify-content: center; padding: 40px; color: var(--text-light); }
+.spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; margin-right: 12px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.toast { position: fixed; top: 20px; right: 20px; z-index: 9999; padding: 12px 24px; border-radius: 8px; color: #fff; font-size: 14px; animation: slideIn .3s ease; }
+.toast.success { background: var(--success); }
+.toast.error { background: var(--danger); }
+.toast.info { background: #718096; }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+#fileInput { display: none; }
+
+/* ===== 登录页 ===== */
+.login-overlay {
+  position: fixed; inset: 0; z-index: 10000;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #0f1f2f 0%, #1a365d 50%, #2a4365 100%);
+}
+.login-card {
+  background: #fff; border-radius: 16px; padding: 48px 40px 40px;
+  width: 400px; max-width: 92%; box-shadow: 0 25px 60px rgba(0,0,0,0.4);
+  text-align: center;
+}
+.login-card .logo-area { margin-bottom: 24px; }
+.login-card .logo-area img { height: 52px; margin-bottom: 12px; }
+.login-card .logo-area h2 { font-size: 22px; color: #1a365d; font-weight: 700; letter-spacing: 1px; }
+.login-card .logo-area p { font-size: 14px; color: #718096; margin-top: 6px; }
+.login-card .input-group { margin-bottom: 20px; text-align: left; }
+.login-card .input-group label { display: block; font-size: 13px; font-weight: 600; color: #4a5568; margin-bottom: 6px; }
+.login-card .input-group input {
+  width: 100%; padding: 12px 14px; border: 2px solid #e2e8f0; border-radius: 8px;
+  font-size: 15px; outline: none; transition: border-color .2s;
+  box-sizing: border-box;
+}
+.login-card .input-group input:focus { border-color: #2E75B6; }
+.login-card .login-btn {
+  width: 100%; padding: 12px; background: linear-gradient(135deg, #1F4E79, #2E75B6);
+  color: #fff; border: none; border-radius: 8px; font-size: 16px; font-weight: 600;
+  cursor: pointer; transition: opacity .2s;
+}
+.login-card .login-btn:hover { opacity: 0.9; }
+.login-card .login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.login-card .login-error {
+  margin-top: 12px; padding: 10px 14px; background: #fff5f5; border: 1px solid #fed7d7;
+  border-radius: 6px; color: #c53030; font-size: 13px; display: none;
+}
+.login-card .login-lang {
+  margin-top: 24px; padding-top: 20px; border-top: 1px solid #e2e8f0;
+  display: flex; justify-content: center; gap: 8px;
+}
+
+/* ===== 语言切换按钮 ===== */
+.lang-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 28px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.3);
+  background: transparent; color: rgba(255,255,255,0.7); font-size: 12px; font-weight: 700;
+  cursor: pointer; transition: all .2s;
+}
+.lang-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+.lang-btn.active { background: rgba(255,255,255,0.25); color: #fff; border-color: #fff; }
+.login-lang .lang-btn { border-color: #cbd5e0; color: #a0aec0; }
+.login-lang .lang-btn:hover { background: #f7fafc; color: #1F4E79; border-color: #1F4E79; }
+.login-lang .lang-btn.active { background: #1F4E79; color: #fff; border-color: #1F4E79; }
+.login-spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin .6s linear infinite; vertical-align: middle; margin-right: 6px; }
+
+/* ===== 底部版权栏 ===== */
+.footer {
+  background: linear-gradient(135deg, #1a2f4a, var(--primary));
+  color: rgba(255,255,255,0.85);
+  text-align: center;
+  padding: 24px 32px;
+  margin-top: 40px;
+  font-size: 13px;
+  line-height: 2;
+}
+.footer .company { font-size: 15px; font-weight: 600; color: #fff; letter-spacing: 1px; margin-bottom: 2px; }
+.footer .tagline { font-size: 13px; color: #90cdf4; font-style: italic; margin-bottom: 6px; }
+.footer .meta { font-size: 12px; opacity: 0.65; }
+</style>
+</head>
+<body>
+
+<!-- ===== 登录覆盖层 ===== -->
+<div id="loginOverlay" class="login-overlay">
+  <div class="login-card">
+    <div class="logo-area">
+      <img src="logo.png" alt="Water X Technologies">
+      <h2 data-i18n="login.title">售后数据分析后台</h2>
+      <p data-i18n="login.subtitle">请输入密码以继续</p>
+    </div>
+    <div class="input-group">
+      <label data-i18n="login.password">密码</label>
+      <input type="password" id="loginPassword" data-i18n="login.placeholder" placeholder="请输入访问密码" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="login-btn" id="loginBtn" onclick="doLogin()"><span data-i18n="login.submit">登录</span></button>
+    <div class="login-error" id="loginError"></div>
+    <div class="login-lang">
+      <button class="lang-btn active" data-lang="zh-CN" onclick="I18N.switchTo('zh-CN')">中</button>
+      <button class="lang-btn" data-lang="en" onclick="I18N.switchTo('en')">EN</button>
+      <button class="lang-btn" data-lang="ja" onclick="I18N.switchTo('ja')">日</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 主应用 ===== -->
+<div id="appMain" style="display:none;">
+
+<div class="header">
+  <div style="display:flex;align-items:center;gap:16px;">
+    <img src="logo.png" alt="商标" style="height:42px;width:auto;flex-shrink:0;">
+    <div>
+      <h1 data-i18n="app.title">📊 售后数据分析后台</h1>
+      <div class="subtitle" data-i18n="app.subtitle">客户投诉部品记录分析系统</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <div style="display:flex;gap:4px;">
+      <button class="lang-btn active" data-lang="zh-CN" onclick="switchLang('zh-CN')">中</button>
+      <button class="lang-btn" data-lang="en" onclick="switchLang('en')">EN</button>
+      <button class="lang-btn" data-lang="ja" onclick="switchLang('ja')">日</button>
+    </div>
+    <div style="text-align:right;">
+      <div style="font-size:12px;font-weight:700;background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.35);border-radius:6px;padding:3px 10px;letter-spacing:0.5px;color:#fff;"><span data-i18n="app.version">Version 1.0</span></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;font-size:13px;opacity:0.9">🟢 <span data-i18n="app.running">系统运行中</span></div>
+    <button class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);" onclick="doLogout()" data-i18n="login.logout">退出登录</button>
+  </div>
+</div>
+
+<div class="sticky-tabs">
+  <div class="sticky-tabs-inner">
+  <div class="tabs">
+    <button class="tab-btn active" data-i18n="tab.upload" onclick="switchTab('upload')">📤 上传分析</button>
+    <button class="tab-btn" data-i18n="tab.monthly" onclick="switchTab('monthly')">📋 各月数据分析</button>
+    <button class="tab-btn" data-i18n="tab.comparison" onclick="switchTab('comparison')">📈 多月对比</button>
+  </div>
+  </div>
+</div>
+
+<div class="container">
+  <div style="height:16px;"></div>
+  <!-- 上传分析页 -->
+  <div id="tab-upload">
+    <div class="card">
+      <div class="card-title" data-i18n="upload.title">上传月度售后数据</div>
+      <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <div class="icon">📁</div>
+        <p data-i18n="upload.dropText">点击或拖拽 Excel 文件到此处</p>
+        <div class="hint" data-i18n="upload.formatHint">支持 .xlsx 格式 · 文件名需包含年月 · 自动检测含多月份数据并拆分保存</div>
+      </div>
+      <input type="file" id="fileInput" accept=".xlsx" onchange="handleFile(event)">
+      <div id="uploadProgress" style="margin-top:12px;display:none;">
+        <div class="loading"><div class="spinner"></div><span data-i18n="upload.analyzing">正在分析数据...</span></div>
+      </div>
+    </div>
+    <div id="uploadResult"></div>
+  </div>
+
+  <!-- 历月数据页 -->
+  <div id="tab-monthly" style="display:none;">
+    <div class="card">
+      <div class="card-title" data-i18n="monthly.title">已存储月份</div>
+      <div id="monthList" class="month-list"></div>
+    </div>
+    <div id="monthDetail"></div>
+  </div>
+
+  <!-- 多月对比页 -->
+  <div id="tab-comparison" style="display:none;">
+    <div id="comparisonContent"></div>
+    <div id="comparisonDownload" style="text-align:center;margin-top:16px;display:none;">
+      <button class="btn btn-download" onclick="downloadComparison()">📥 <span data-i18n="comparison.download">下载对比报告 (HTML)</span></button>
+    </div>
+  </div>
+</div>
+
+<div id="toastContainer"></div>
+
+<!-- ===== 页面底部版权栏 ===== -->
+<div class="footer">
+  <div class="company" data-i18n="footer.company">株式会社 Water X Technologies</div>
+  <div class="tagline" data-i18n="footer.tagline">制造产业和AI的融合 · Manufacturing × Artificial Intelligence</div>
+  <div class="meta"><span data-i18n="footer.copyright">售后数据分析系统 Version 1.0</span> &nbsp;|&nbsp; <span data-i18n="footer.rights">© 2026 Water X Technologies. All rights reserved.</span> &nbsp;|&nbsp; <span data-i18n="footer.released">Released: 2026年5月</span></div>
+</div>
+
+</div><!-- /appMain -->
+
+<script>
+// ===== API 配置：自动检测环境 =====
+// 开发环境（file:// 或 localhost）→ http://localhost:5859/api
+// 部署环境（通过 Nginx/Flask 访问）→ 相对路径 /api
+const API = (function(){
+  const proto = window.location.protocol;
+  const host = window.location.hostname;
+  if (proto === 'file:' || host === 'localhost' || host === '127.0.0.1' || host === '') {
+    return 'http://localhost:5859/api';
+  }
+  return '/api';
+})();
+let allResults = null;
+
+// ===== 工具函数 =====
+
+/** 获取当前语言并拼接到 URL */
+function _u(path) {
+  const sep = path.includes('?') ? '&' : '?';
+  return `${API}${path}${sep}lang=${I18N.current}`;
+}
+
+/** 带 credentials 的 fetch 封装 */
+async function _f(path, opts = {}) {
+  return fetch(_u(path), { ...opts, credentials: 'include' });
+}
+
+/** 简单确认对话框（使用内置 confirm） */
+function _confirm(msg) {
+  return confirm(msg);
+}
+
+// ===== 登录认证 =====
+
+async function checkAuth() {
+  try {
+    const res = await fetch(`${API}/check-auth`, { credentials: 'include' });
+    const data = await res.json();
+    if (data.logged_in) {
+      document.getElementById('loginOverlay').style.display = 'none';
+      document.getElementById('appMain').style.display = 'block';
+      // 登录成功后初始化 i18n
+      I18N.init();
+      // 初始化数据加载
+      loadMonths();
+      return true;
+    }
+    // 未登录：显示登录页，初始化语言选择
+    I18N.init();
+    return false;
+  } catch (e) {
+    console.error('Auth check failed:', e);
+    // 如果 API 不可达，尝试用本地密码模式继续
+    I18N.init();
+    return false;
+  }
+}
+
+async function doLogin() {
+  const pw = document.getElementById('loginPassword').value;
+  const btn = document.getElementById('loginBtn');
+  const err = document.getElementById('loginError');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="login-spinner"></span>';
+  err.style.display = 'none';
+  try {
+    const res = await fetch(`${API}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ password: pw })
+    });
+    const data = await res.json();
+    if (data.success) {
+      document.getElementById('loginOverlay').style.display = 'none';
+      document.getElementById('appMain').style.display = 'block';
+      I18N.init();
+      loadMonths();
+    } else {
+      btn.disabled = false;
+      btn.innerHTML = I18N.t('login.submit');
+      err.textContent = I18N.t('login.error');
+      err.style.display = 'block';
+    }
+  } catch (e) {
+    btn.disabled = false;
+    btn.innerHTML = I18N.t('login.submit');
+    // 网络错误（Failed to fetch）≠ 密码错误，显示单独的提示
+    err.textContent = I18N.t('login.networkError');
+    err.style.display = 'block';
+    console.error('Login network error:', e);
+  }
+}
+
+async function doLogout() {
+  await fetch(`${API}/logout`, { method: 'POST', credentials: 'include' });
+  document.getElementById('appMain').style.display = 'none';
+  document.getElementById('loginOverlay').style.display = 'flex';
+  document.getElementById('loginPassword').value = '';
+  document.getElementById('loginError').style.display = 'none';
+}
+
+/** 语言切换（主界面） */
+function switchLang(lang) {
+  I18N.switchTo(lang);
+  // 重新加载当前 tab 的数据以刷新翻译
+  const activeTab = document.querySelector('.tab-btn.active');
+  if (activeTab) {
+    const tabName = activeTab.textContent.includes(I18N.t('tab.upload')) ? 'upload'
+      : activeTab.textContent.includes(I18N.t('tab.monthly')) ? 'monthly'
+      : 'comparison';
+    if (tabName === 'monthly') loadMonths();
+    if (tabName === 'comparison') loadComparison();
+  }
+}
+
+// ===== Toast =====
+function toast(msg, type='success') {
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  document.getElementById('toastContainer').appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+// Tab 切换
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  const tabs = document.querySelectorAll('.tab-btn');
+  // 通过 data-i18n key 识别 tab
+  const tabKeys = { upload:'tab.upload', monthly:'tab.monthly', comparison:'tab.comparison' };
+  tabs.forEach(b => {
+    if (b.getAttribute('data-i18n') === tabKeys[tab]) b.classList.add('active');
+  });
+  ['upload','monthly','comparison'].forEach(id => {
+    document.getElementById(`tab-${id}`).style.display = id === tab ? 'block' : 'none';
+  });
+  if (tab === 'monthly') loadMonths();
+  if (tab === 'comparison') loadComparison();
+}
+
+// 拖拽上传
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) uploadFile(file);
+});
+
+function handleFile(e) {
+  const file = e.target.files[0];
+  if (file) uploadFile(file);
+}
+
+async function uploadFile(file) {
+  const progress = document.getElementById('uploadProgress');
+  const result = document.getElementById('uploadResult');
+  progress.style.display = 'block';
+  result.innerHTML = '';
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const res = await _f('/upload', { method: 'POST', body: formData });
+    const data = await res.json();
+    progress.style.display = 'none';
+
+    if (data.error) { toast(data.error, 'error'); return; }
+
+    allResults = data;
+
+    if (data.is_multi_month) {
+      // ===== 多月份上传 =====
+      const saved = data.saved_months?.length || 0;
+      const exists = data.already_exists_months || [];
+      const total = data.total_months_detected || 0;
+
+      let msg = `✅ 检测到 ${total} 个月份`;
+      if (saved > 0) msg += `，已保存 ${saved} 个月`;
+      if (exists.length > 0) msg += `，${exists.length} 个月份已有数据（见下方提示）`;
+      toast(msg, 'success');
+      renderMultiMonthResult(data);
+      loadMonths();
+
+      // 如果有已存在的月份，弹出覆盖确认
+      if (exists.length > 0) {
+        showOverwriteConfirm(exists, data._month_results_for_overwrite || {});
+      }
+
+    } else {
+      // ===== 单月上传 =====
+      if (data.filename_mismatch) {
+        // 文件名与数据日期不一致：先弹确认框
+        renderUploadResult(data);
+        showFilenameMismatchConfirm(data);
+      } else if (data.already_exists) {
+        // 已存在：展示结果 + 弹出覆盖确认
+        renderUploadResult(data);
+        const label = data.summary.month_label;
+        const year = data.summary.year;
+        const month = data.summary.month;
+        showSingleOverwriteConfirm(label, year, month, data.summary, data.results, data.raw_data_json);
+      } else {
+        toast('✅ 分析完成！数据已保存', 'success');
+        renderUploadResult(data);
+        loadMonths();
+      }
+    }
+  } catch (err) {
+    progress.style.display = 'none';
+    toast('上传失败: ' + err.message, 'error');
+  }
+}
+
+/** 文件名与数据日期不一致的确认对话框 */
+function showFilenameMismatchConfirm(data) {
+  const fnLabel = `${data.filename_year}年${data.filename_month}月`;
+  const dtLabel = `${data.data_year}年${data.data_month}月`;
+  const translatedResults = I18N.translateResults(data.results || {});
+  const translatedSummary = I18N.translateSummary(data.summary || {});
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:12px;padding:32px;max-width:500px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+      <div style="font-size:20px;font-weight:700;color:#d97706;margin-bottom:16px;">⚠️ ${I18N.t('modal.mismatch.title')}</div>
+      <div style="color:#4a5568;font-size:15px;line-height:1.7;margin-bottom:8px;">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+          <span style="background:#fed7aa;color:#c05621;padding:3px 10px;border-radius:6px;font-weight:600;font-size:13px;">${I18N.t('modal.mismatch.filename')}</span>
+          <span style="font-size:16px;font-weight:600;">${fnLabel}</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;">
+          <span style="background:#c6f6d5;color:#276749;padding:3px 10px;border-radius:6px;font-weight:600;font-size:13px;">${I18N.t('modal.mismatch.dataDate')}</span>
+          <span style="font-size:16px;font-weight:600;">${dtLabel}</span>
+        </div>
+        <div style="background:#fffbeb;border:1px solid #f6e05e;border-radius:8px;padding:12px 14px;font-size:14px;color:#744210;">
+          ${I18N.t('modal.mismatch.hint')}
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px;">
+        <button id="btnMismatchNo"  style="padding:10px 24px;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;font-size:14px;background:#f7fafc;font-weight:500;">${I18N.t('modal.mismatch.no')}</button>
+        <button id="btnMismatchYes" style="padding:10px 24px;background:#2b6cb0;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:700;">${I18N.t('modal.mismatch.yes')}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  modal.querySelector('#btnMismatchNo').onclick = () => {
+    document.body.removeChild(modal);
+    toast(I18N.t('toast.cancelled'), 'info');
+  };
+
+  modal.querySelector('#btnMismatchYes').onclick = async () => {
+    document.body.removeChild(modal);
+    const year = data.data_year;
+    const month = data.data_month;
+    const label = translatedSummary.month_label || data.summary.month_label;
+    try {
+      const months = await (await _f('/months')).json();
+      const exists = (months.months || []).some(m => m.year === year && m.month === month);
+      if (exists) {
+        showSingleOverwriteConfirm(label, year, month, translatedSummary, translatedResults, data.raw_data_json);
+      } else {
+        const r = await _f('/overwrite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ year, month, month_label: label, summary: translatedSummary, results: translatedResults, raw_data_json: data.raw_data_json || null })
+        });
+        const d = await r.json();
+        if (d.error) { toast(d.error, 'error'); return; }
+        toast(`✅ ${label} ${I18N.t('toast.savedByDate')}`, 'success');
+        loadMonths();
+      }
+    } catch(e) {
+      toast(I18N.t('toast.saveFail') + ': ' + e.message, 'error');
+    }
+  };
+}
+
+/** 单月覆盖确认对话框 */
+function showSingleOverwriteConfirm(label, year, month, summary, results, rawDataJson) {
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:12px;padding:32px;max-width:460px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+      <div style="font-size:20px;font-weight:700;color:#c53030;margin-bottom:12px;">⚠️ ${I18N.t('modal.exists.title')}</div>
+      <div style="color:#4a5568;font-size:15px;margin-bottom:20px;">
+        <b>${label}</b> ${I18N.t('modal.exists.body')}
+      </div>
+      <div style="display:flex;gap:12px;justify-content:flex-end;">
+        <button id="btnCancel" style="padding:10px 20px;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;font-size:14px;background:#f7fafc;">${I18N.t('modal.exists.cancel')}</button>
+        <button id="btnOverwrite" style="padding:10px 20px;background:#e53e3e;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">${I18N.t('modal.exists.overwrite')}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.querySelector('#btnCancel').onclick = () => { document.body.removeChild(modal); toast(I18N.t('toast.keepOriginal'), 'info'); };
+  modal.querySelector('#btnOverwrite').onclick = async () => {
+    document.body.removeChild(modal);
+    try {
+      const r = await _f('/overwrite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ year, month, month_label: label, summary, results, raw_data_json: rawDataJson || null })
+      });
+      const d = await r.json();
+      if (d.error) { toast(d.error, 'error'); return; }
+      toast(`✅ ${label} ${I18N.t('toast.overwritten')}`, 'success');
+      loadMonths();
+    } catch (e) { toast(I18N.t('toast.overwriteFail') + ': ' + e.message, 'error'); }
+  };
+}
+
+/** 多月份覆盖确认对话框 */
+function showOverwriteConfirm(existsList, resultsMap) {
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);';
+  const costSymbol = I18N.t('summary.costUnit');
+  const listHtml = existsList.map(m =>
+    `<li style="padding:6px 0;border-bottom:1px solid #f0f0f0;">
+      <b>${m.month_label}</b>：${m.record_count} ${I18N.t('monthly.records')}，${costSymbol}${(m.summary?.total_cost||0).toLocaleString()}
+    </li>`
+  ).join('');
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:12px;padding:32px;max-width:500px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+      <div style="font-size:20px;font-weight:700;color:#c53030;margin-bottom:12px;">⚠️ ${I18N.t('modal.multiExists.title')}</div>
+      <ul style="list-style:none;padding:0;margin:0 0 16px;font-size:14px;color:#4a5568;max-height:200px;overflow-y:auto;">${listHtml}</ul>
+      <div style="color:#718096;font-size:13px;margin-bottom:20px;">${I18N.t('modal.multiExists.hint')}</div>
+      <div style="display:flex;gap:12px;justify-content:flex-end;">
+        <button id="mBtnCancel" style="padding:10px 20px;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;font-size:14px;background:#f7fafc;">${I18N.t('modal.multiExists.cancel')}</button>
+        <button id="mBtnOverwrite" style="padding:10px 20px;background:#e53e3e;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;">${I18N.t('modal.multiExists.overwrite')}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.querySelector('#mBtnCancel').onclick = () => { document.body.removeChild(modal); toast(I18N.t('toast.keepOriginal'), 'info'); };
+  modal.querySelector('#mBtnOverwrite').onclick = async () => {
+    document.body.removeChild(modal);
+    let ok = 0, fail = 0;
+    for (const m of existsList) {
+      const key = `${m.year}-${m.month}`;
+      const rd = resultsMap[key] || {};
+      try {
+        const r = await _f('/overwrite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ year: m.year, month: m.month, month_label: m.month_label, summary: m.summary, results: rd.results || {}, raw_data_json: rd.raw_data_json || null })
+        });
+        const d = await r.json();
+        d.error ? fail++ : ok++;
+      } catch { fail++; }
+    }
+    toast(fail === 0
+      ? `✅ ${ok} ${I18N.t('toast.allOverwritten')}`
+      : `⚠️ ${I18N.t('toast.partialOverwritten')}：${ok} ${I18N.t('toast.success')}，${fail} ${I18N.t('toast.fail')}`,
+      fail === 0 ? 'success' : 'error');
+    loadMonths();
+  };
+}
+
+function renderUploadResult(data) {
+  // 翻译结果标题和列名
+  const translatedResults = I18N.translateResults(data.results || {});
+  const translatedSummary = I18N.translateSummary(data.summary || {});
+  const { summary, results } = { summary: translatedSummary, results: translatedResults };
+  const r = document.getElementById('uploadResult');
+  const costSymbol = I18N.t('summary.costUnit');
+
+  let html = `
+    <div class="card">
+      <div class="card-title">📊 ${summary.month_label || ''} ${I18N.t('upload.summaryTitle')}</div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="value">${summary.total_records}</div><div class="label">${I18N.t('summary.totalRecords')}</div></div>
+        <div class="stat-card"><div class="value">${costSymbol}${summary.total_cost.toLocaleString()}</div><div class="label">${I18N.t('summary.totalCost')}</div></div>
+        <div class="stat-card"><div class="value">${summary.in_warranty_count}</div><div class="label">${I18N.t('summary.inWarranty')}</div></div>
+        <div class="stat-card"><div class="value">${summary.out_warranty_count}</div><div class="label">${I18N.t('summary.outWarranty')}</div></div>
+        <div class="stat-card"><div class="value">${summary.cover_count}</div><div class="label">${I18N.t('summary.coverCount')}</div></div>
+        <div class="stat-card"><div class="value">${summary.whole_count}</div><div class="label">${I18N.t('summary.wholeCount')}</div></div>
+      </div>
+    </div>
+  `;
+
+  // 分析1：保修费用
+  html += renderTable(results.analysis_1, true);
+  // 分析2：使用月数
+  html += renderTable(results.analysis_2, true);
+  // 分析3：盖机TOP10
+  html += renderTable(results.analysis_3, true);
+  // 分析4：盖机保内部品
+  html += renderNested(results.analysis_4);
+  // 分析5：盖机部品排序
+  html += renderNested(results.analysis_5);
+  // 分析6：整机TOP10
+  html += renderTable(results.analysis_6, true);
+  // 分析7：整机保内部品
+  html += renderNested(results.analysis_7);
+  // 分析8：整机部品排序
+  html += renderNested(results.analysis_8);
+  // 分析9-11：特殊统计
+  [results.analysis_9, results.analysis_10, results.analysis_11].forEach(a => {
+    if (a && a.data) html += renderTable(a, false);
+  });
+  // 分析12：座盖使用月数
+  if (results.analysis_12 && results.analysis_12.data) {
+    html += renderTable(results.analysis_12, true);
+  }
+  // 分析13：所有产品使用月数汇总
+  if (results.analysis_13 && results.analysis_13.data) {
+    html += renderTable(results.analysis_13, true);
+  }
+
+  r.innerHTML = html;
+}
+
+function renderTable(analysis, isMultiRow) {
+  if (!analysis || !analysis.data || analysis.data.length === 0) return '';
+  const headers = analysis._orderedColumns || Object.keys(analysis.data[0]);
+  const isUsageSummary = headers.includes('月数合计');
+  const monthIdx = isUsageSummary ? headers.indexOf('件数') : -1;
+  const verifyIdx = isUsageSummary ? headers.indexOf('月数合计') : -1;
+
+  let rows = '';
+  analysis.data.forEach(r => {
+    const mismatch = isUsageSummary && r['件数'] !== r['月数合计'];
+    rows += '<tr>' + headers.map((h, idx) => {
+      let v = r[h];
+      if (typeof v === 'number') {
+        if (v === 0) return `<td></td>`;
+        v = v.toLocaleString();
+      }
+      const cls = (mismatch && (idx === monthIdx || idx === verifyIdx)) ? ' style="color:#dc2626;font-weight:700;"' : '';
+      return `<td${cls}>${v ?? '-'}</td>`;
+    }).join('') + '</tr>';
+  });
+
+  return `
+    <div class="section">
+      <h3>${analysis.title}</h3>
+      <div style="overflow-x:auto;"><table>
+        <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+    </div>
+  `;
+}
+
+function renderNested(analysis) {
+  if (!analysis || !analysis.data || analysis.data.length === 0) return '';
+  let html = `<div class="section"><h3>${analysis.title}</h3>`;
+
+  const nestedOrder = analysis._orderedColumns || null;
+
+  analysis.data.forEach(model => {
+    const parts = model['TOP10部品'] || [];
+    if (parts.length === 0) return;
+    const headers = nestedOrder || Object.keys(parts[0]);
+    let rows = parts.map(p => '<tr>' + headers.map(h => {
+      let v = p[h]; if (typeof v === 'number') v = v.toLocaleString();
+      return `<td>${v ?? '-'}</td>`;
+    }).join('') + '</tr>').join('');
+
+    html += `
+      <div class="nested-model">
+        <h4>📦 型号: ${model['型号']} （总次数: ${model['总次数']}）</h4>
+        <div style="overflow-x:auto;"><table>
+          <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+      </div>
+    `;
+  });
+
+  html += '</div>';
+  return html;
+}
+
+function renderMultiMonthResult(data) {
+  const { summary, results, month_details, saved_months, already_exists_months, total_months_detected } = data;
+  const existsCount = already_exists_months?.length || 0;
+  const r = document.getElementById('uploadResult');
+  const costSymbol = I18N.t('summary.costUnit');
+
+      // 翻译（在 multi-month 中替换 summary/results）
+      data.results = I18N.translateResults(results || {});
+      data.summary = I18N.translateSummary(summary || {});
+
+  let html = `
+    <div class="card" style="background:linear-gradient(135deg,#1a365d,#2a4365);color:#fff;">
+      <div class="card-title" style="color:#bee3f8;border-left-color:#63b3ed;">📂 ${I18N.t('upload.multiTitle')}</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:8px;">
+        <div style="text-align:center;padding:12px;background:rgba(255,255,255,0.1);border-radius:8px;">
+          <div style="font-size:28px;font-weight:700;">${total_months_detected}</div>
+          <div style="font-size:12px;opacity:0.8;">${I18N.t('upload.detectedLabel')}</div>
+        </div>
+        <div style="text-align:center;padding:12px;background:rgba(56,161,105,0.3);border-radius:8px;">
+          <div style="font-size:28px;font-weight:700;">${saved_months?.length || 0}</div>
+          <div style="font-size:12px;opacity:0.8;">${I18N.t('upload.savedLabel')}</div>
+        </div>
+        <div style="text-align:center;padding:12px;background:rgba(229,62,62,0.3);border-radius:8px;">
+          <div style="font-size:28px;font-weight:700;">${existsCount}</div>
+          <div style="font-size:12px;opacity:0.8;">${I18N.t('upload.existsLabel')}</div>
+        </div>
+      </div>
+      ${saved_months?.length ? `<div style="margin-top:12px;font-size:13px;">✅ ${I18N.t('upload.savedLabel')}：${saved_months.join(' · ')}</div>` : ''}
+      ${existsCount ? `<div style="margin-top:4px;font-size:13px;background:rgba(229,62,62,0.2);padding:8px 12px;border-radius:6px;">⚠️ ${I18N.t('upload.existsLabel')}：${already_exists_months.map(m=>m.month_label).join(' · ')}</div>` : ''}
+    </div>
+
+    <div class="card">
+      <div class="card-title">📊 ${I18N.t('upload.overview')}</div>
+      <div style="overflow-x:auto;"><table>
+        <thead><tr><th>${I18N.t('comparison.colMonth')}</th><th>${I18N.t('comparison.colRecords')}</th><th>${I18N.t('comparison.colCost')}</th><th>${I18N.t('comparison.colInWarranty')}</th><th>${I18N.t('comparison.colOutWarranty')}</th><th>${I18N.t('summary.coverCount')}</th><th>${I18N.t('summary.wholeCount')}</th><th>${I18N.t('status')}</th></tr></thead>
+        <tbody>${(month_details || []).map(md => {
+          const isExists = (already_exists_months||[]).some(e => e.year===md.year && e.month===md.month);
+          const statusBadge = isExists
+            ? `<span style="background:#fff5f5;color:#c53030;padding:2px 8px;border-radius:4px;font-size:12px;">⚠️ ${I18N.t('status.pendingOverwrite')}</span>`
+            : `<span style="background:#f0fff4;color:#276749;padding:2px 8px;border-radius:4px;font-size:12px;">✅ ${I18N.t('status.saved')}</span>`;
+          return `<tr>
+            <td style="font-weight:600;">${md.month_label}</td>
+            <td>${md.record_count}</td>
+            <td>${costSymbol}${md.summary.total_cost.toLocaleString()}</td>
+            <td>${md.summary.in_warranty_count}</td>
+            <td>${md.summary.out_warranty_count}</td>
+            <td>${md.summary.cover_count}</td>
+            <td>${md.summary.whole_count}</td>
+            <td>${statusBadge}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📊 ${translatedSummary.month_label || ''} ${I18N.t('upload.summaryTitle')}</div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="value">${translatedSummary.total_records}</div><div class="label">${I18N.t('summary.totalRecords')}</div></div>
+        <div class="stat-card"><div class="value">${costSymbol}${translatedSummary.total_cost.toLocaleString()}</div><div class="label">${I18N.t('summary.totalCost')}</div></div>
+        <div class="stat-card"><div class="value">${translatedSummary.in_warranty_count}</div><div class="label">${I18N.t('summary.inWarranty')}</div></div>
+        <div class="stat-card"><div class="value">${translatedSummary.out_warranty_count}</div><div class="label">${I18N.t('summary.outWarranty')}</div></div>
+        <div class="stat-card"><div class="value">${translatedSummary.cover_count}</div><div class="label">${I18N.t('summary.coverCount')}</div></div>
+        <div class="stat-card"><div class="value">${translatedSummary.whole_count}</div><div class="label">${I18N.t('summary.wholeCount')}</div></div>
+      </div>
+    </div>
+  `;
+
+  r.innerHTML = html;
+
+  // 继续渲染详细分析表格（使用已翻译的 results）
+  const tResults = data.results;
+  const detailHtml = [
+    renderTable(tResults.analysis_1, true),
+    renderTable(tResults.analysis_2, true),
+    renderTable(tResults.analysis_3, true),
+    renderNested(tResults.analysis_4),
+    renderNested(tResults.analysis_5),
+    renderTable(tResults.analysis_6, true),
+    renderNested(tResults.analysis_7),
+    renderNested(tResults.analysis_8),
+    ...[tResults.analysis_9, tResults.analysis_10, tResults.analysis_11].map(a => renderTable(a, false)),
+    renderTable(tResults.analysis_12, true),
+    renderTable(tResults.analysis_13, true),
+  ].join('');
+
+  const detailEl = document.createElement('div');
+  detailEl.innerHTML = detailHtml;
+  r.appendChild(detailEl);
+}
+
+// ========== 历月数据 ==========
+async function loadMonths() {
+  try {
+    const res = await _f('/months');
+    const data = await res.json();
+    renderMonthList(data.months);
+  } catch (err) {
+    toast(I18N.t('toast.loadFail') + ': ' + err.message, 'error');
+  }
+}
+
+function renderMonthList(months) {
+  const el = document.getElementById('monthList');
+  const costSymbol = I18N.t('summary.costUnit');
+  if (!months || months.length === 0) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">📭</div><p>${I18N.t('monthly.empty')}</p></div>`;
+    return;
+  }
+  el.innerHTML = months.map(m => `
+    <div class="month-card">
+      <div class="info">
+        <h4>${m.month_label}</h4>
+        <div class="meta">${I18N.t('monthly.records')} ${m.total_records} · ${I18N.t('summary.totalCost')} ${costSymbol}${m.total_cost.toLocaleString()} · ${I18N.t('monthly.uploadedAt')} ${m.created_at?.slice(0,10) || '-'}</div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-outline btn-sm" onclick="viewMonth(${m.id})">${I18N.t('monthly.view')}</button>
+        <button class="btn btn-primary btn-sm" onclick="exportExcel(${m.id})">${I18N.t('monthly.export')}</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteMonth(${m.id})">${I18N.t('monthly.delete')}</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function viewMonth(id) {
+  try {
+    const res = await _f(`/months/${id}`);
+    const detail = await res.json();
+    if (detail.analysis_data) {
+      renderUploadResult({ summary: detail, results: detail.analysis_data });
+      switchTab('upload');
+      document.getElementById('uploadResult').scrollIntoView({ behavior: 'smooth' });
+    }
+  } catch (err) {
+    toast(I18N.t('toast.viewFail') + ': ' + err.message, 'error');
+  }
+}
+
+async function exportExcel(id) {
+  window.open(_u(`/export/${id}`), '_blank');
+}
+
+function downloadComparison() {
+  window.open(_u('/export/comparison-html'), '_blank');
+  toast(I18N.t('toast.downloading'));
+}
+
+async function deleteMonth(id) {
+  if (!_confirm(I18N.t('toast.deleteConfirm'))) return;
+  try {
+    await _f(`/months/${id}`, { method: 'DELETE' });
+    toast(I18N.t('toast.deleted'));
+    loadMonths();
+  } catch (err) {
+    toast(I18N.t('toast.deleteFail') + ': ' + err.message, 'error');
+  }
+}
+
+// ========== 多月对比 ==========
+const TREND_COLORS = ['#2E75B6','#e53e3e','#38a169','#d69e2e','#805ad5','#dd6b20','#319795','#d53f8c'];
+
+function buildTrendTable(tbl) {
+  if (!tbl || !tbl.rows || !tbl.rows.length) return '';
+  return `<div style="overflow-x:auto;margin-top:16px;"><table><thead><tr>${
+    tbl.columns.map(c => `<th>${c}</th>`).join('')
+  }</tr></thead><tbody>${
+    tbl.rows.map(r => `<tr><td style="font-weight:600;text-align:left;">${r.label}</td>${
+      r.data.map(v => `<td>${v || 0}</td>`).join('')
+    }</tr>`).join('')
+  }</tbody></table></div>`;
+}
+
+function buildPartsDetailTable(detail) {
+  if (!detail || !detail.models || !detail.models.length) return '';
+  let html = '';
+  for (const modelInfo of detail.models) {
+    html += `<div style="margin-top:16px;"><h4 style="color:#2E75B6;margin-bottom:6px;">型号：${modelInfo.model}</h4>`;
+    html += `<div style="overflow-x:auto;"><table><thead><tr><th>部品</th>${
+      detail.labels.map(l => `<th>${l}</th>`).join('')
+    }</tr></thead><tbody>`;
+    for (const p of modelInfo.parts) {
+      html += `<tr><td style="font-weight:500;">${p.name}</td>${
+        p.data.map(v => `<td>${v || 0}</td>`).join('')
+      }</tr>`;
+    }
+    html += '</tbody></table></div></div>';
+  }
+  return html;
+}
+
+async function loadComparison() {
+  const el = document.getElementById('comparisonContent');
+  const costSymbol = I18N.t('summary.costUnit');
+  try {
+    const res = await _f('/comparison');
+    const data = await res.json();
+    if (!data.labels || data.labels.length === 0) {
+      el.innerHTML = `<div class="card"><div class="empty-state"><div class="icon">📊</div><p>${I18N.t('comparison.empty')}</p></div></div>`;
+      document.getElementById('comparisonDownload').style.display = 'none';
+      return;
+    }
+    document.getElementById('comparisonDownload').style.display = 'block';
+
+    const trends = data.trends;
+
+    let html = `
+      <div class="card"><div class="card-title">📈 ${I18N.t('comparison.title')}</div>
+      <div class="charts-row">
+        <div style="height:260px;"><canvas id="chartRecords"></canvas></div>
+        <div style="height:260px;"><canvas id="chartCost"></canvas></div>
+      </div>
+      <div class="charts-row">
+        <div style="height:260px;"><canvas id="chartWarranty"></canvas></div>
+        <div style="height:260px;"><canvas id="chartUnitType"></canvas></div>
+      </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📋 ${I18N.t('comparison.table')}</div>
+        <div style="overflow-x:auto;"><table>
+          <thead><tr><th>${I18N.t('comparison.colMonth')}</th><th>${I18N.t('comparison.colRecords')}</th><th>${I18N.t('comparison.colCost')}</th><th>${I18N.t('comparison.colInWarranty')}</th><th>${I18N.t('comparison.colOutWarranty')}</th><th>${I18N.t('comparison.colCover')}</th><th>${I18N.t('comparison.colWhole')}</th><th>${I18N.t('comparison.colRatio')}</th></tr></thead>
+          <tbody>${data.details.map(d => `
+            <tr>
+              <td>${d.month_label}</td>
+              <td>${d.total_records}</td>
+              <td>${costSymbol}${d.total_cost.toLocaleString()}</td>
+              <td>${d.in_warranty_count}</td>
+              <td>${d.out_warranty_count}</td>
+              <td>${d.cover_count}</td>
+              <td>${d.whole_count}</td>
+              <td>${data.in_warranty_ratio[data.details.indexOf(d)]}%</td>
+            </tr>
+          `).join('')}</tbody>
+        </table></div>
+      </div>
+    `;
+
+    if (trends) {
+      html += `
+        <div class="card"><div class="card-title">🔧 ${I18N.t('comparison.coverTop10')}</div>
+          <div style="height:320px;"><canvas id="chartCoverTop10"></canvas></div>
+          ${buildTrendTable(trends.cover_top10.table)}
+        </div>
+        <div class="card"><div class="card-title">📦 ${I18N.t('comparison.wholeTop10')}</div>
+          <div style="height:320px;"><canvas id="chartWholeTop10"></canvas></div>
+          ${buildTrendTable(trends.whole_top10.table)}
+        </div>
+        <div class="card"><div class="card-title">🔩 ${I18N.t('comparison.coverParts')}</div>
+          <div style="height:320px;"><canvas id="chartCoverParts"></canvas></div>
+          ${buildTrendTable(trends.cover_parts.table)}
+          <div style="margin-top:20px;padding-top:16px;border-top:2px solid #e2e8f0;">
+            <div style="font-weight:700;color:#1F4E79;font-size:15px;margin-bottom:12px;">📊 ${I18N.t('comparison.partsDetail')}</div>
+            ${buildPartsDetailTable(trends.cover_parts_detail)}
+          </div>
+        </div>
+        <div class="card"><div class="card-title">⚙️ ${I18N.t('comparison.wholeParts')}</div>
+          <div style="height:320px;"><canvas id="chartWholeParts"></canvas></div>
+          ${buildTrendTable(trends.whole_parts.table)}
+          <div style="margin-top:20px;padding-top:16px;border-top:2px solid #e2e8f0;">
+            <div style="font-weight:700;color:#1F4E79;font-size:15px;margin-bottom:12px;">📊 ${I18N.t('comparison.partsDetail')}</div>
+            ${buildPartsDetailTable(trends.whole_parts_detail)}
+          </div>
+        </div>
+        <div class="card"><div class="card-title">🎯 ${I18N.t('comparison.special')}</div>
+          <div style="height:280px;"><canvas id="chartSpecial"></canvas></div>
+          ${buildTrendTable(trends.special.table)}
+        </div>
+        <div class="card"><div class="card-title">🪑 ${I18N.t('comparison.seatUsage')}</div>
+          <div style="height:320px;"><canvas id="chartSeatUsage"></canvas></div>
+          ${buildTrendTable(trends.seat_usage.table)}
+        </div>
+      `;
+    }
+
+    el.innerHTML = html;
+
+    setTimeout(() => {
+      renderChart('chartRecords', 'bar', data.labels, [{
+        label: I18N.t('comparison.recordsTrend'), data: data.total_records, backgroundColor: '#2E75B6'
+      }]);
+      renderChart('chartCost', 'line', data.labels, [{
+        label: I18N.t('comparison.costTrend'), data: data.total_cost, borderColor: '#e53e3e', backgroundColor: 'rgba(229,62,62,0.1)', tension: 0.3, fill: true
+      }]);
+      renderChart('chartWarranty', 'line', data.labels, [{
+        label: I18N.t('comparison.warrantyTrend'), data: data.in_warranty_ratio, borderColor: '#38a169', backgroundColor: 'rgba(56,161,105,0.1)', tension: 0.3, fill: true
+      }]);
+      renderChart('chartUnitType', 'bar', data.labels, [
+        { label: I18N.t('summary.coverCount'), data: data.details.map(d => d.cover_count), backgroundColor: '#2E75B6' },
+        { label: I18N.t('summary.wholeCount'), data: data.details.map(d => d.whole_count), backgroundColor: '#718096' }
+      ]);
+
+      if (trends) {
+        renderChart('chartCoverTop10', 'line', trends.cover_top10.labels,
+          trends.cover_top10.datasets.map((ds, i) => ({
+            label: ds.model, data: ds.data, borderColor: TREND_COLORS[i % 8],
+            backgroundColor: 'transparent', tension: 0.3, pointRadius: 3
+          }))
+        );
+        renderChart('chartWholeTop10', 'line', trends.whole_top10.labels,
+          trends.whole_top10.datasets.map((ds, i) => ({
+            label: ds.model, data: ds.data, borderColor: TREND_COLORS[i % 8],
+            backgroundColor: 'transparent', tension: 0.3, pointRadius: 3
+          }))
+        );
+        renderChart('chartCoverParts', 'line', trends.cover_parts.labels,
+          trends.cover_parts.datasets.map((ds, i) => ({
+            label: ds.part, data: ds.data, borderColor: TREND_COLORS[i % 8],
+            backgroundColor: 'transparent', tension: 0.3, pointRadius: 3
+          }))
+        );
+        renderChart('chartWholeParts', 'line', trends.whole_parts.labels,
+          trends.whole_parts.datasets.map((ds, i) => ({
+            label: ds.part, data: ds.data, borderColor: TREND_COLORS[i % 8],
+            backgroundColor: 'transparent', tension: 0.3, pointRadius: 3
+          }))
+        );
+        renderChart('chartSpecial', 'line', trends.special.labels,
+          trends.special.datasets.map((ds, i) => ({
+            label: ds.label, data: ds.data,
+            borderColor: ['#e53e3e','#d69e2e','#805ad5'][i],
+            backgroundColor: 'transparent', tension: 0.3, pointRadius: 4, borderWidth: 2
+          }))
+        );
+        renderChart('chartSeatUsage', 'bar', trends.seat_usage.labels,
+          trends.seat_usage.datasets.map((ds, i) => ({
+            label: ds.bucket, data: ds.data, backgroundColor: TREND_COLORS[i % 8]
+          }))
+        );
+      }
+    }, 100);
+
+    loadAIInsights();
+  } catch (err) {
+    el.innerHTML = `<div class="card"><p style="color:var(--danger)">${I18N.t('toast.loadFail')}: ${err.message}</p></div>`;
+  }
+}
+
+async function loadAIInsights() {
+  try {
+    // 根据当前语言传参给后端
+    const langParam = I18N.getLang ? I18N.getLang() : (I18N.locale || 'zh');
+    const res = await _f(`/analysis/insights?lang=${langParam}`);
+    const insights = await res.json();
+    if (!insights.summary && !insights.key_findings?.length) return;
+
+    let html = '';
+
+    if (insights.summary) {
+      html += `<div class="card" style="background:linear-gradient(135deg,#1a365d,#2a4365);color:#fff;">
+        <div class="card-title" style="color:#bee3f8;border-left-color:#63b3ed;">🤖 ${I18N.t('ai.summary')}</div>
+        <div style="font-size:15px;line-height:1.8;opacity:0.95;">${insights.summary}</div>
+        <div style="font-size:11px;opacity:0.6;margin-top:12px;">${I18N.t('ai.generatedAt')}：${insights.generated_at || ''} · ${I18N.t('ai.autoAnalysis')}</div>
+      </div>`;
+    }
+
+    if (insights.key_findings?.length) {
+      const sevIcon = {high:'🔴',medium:'🟡',low:'🟢'};
+      const sevBg = {high:'#fff5f5',medium:'#fffff0',low:'#f0fff4'};
+      const sevBorder = {high:'#e53e3e',medium:'#d69e2e',low:'#38a169'};
+      const items = insights.key_findings.map(f => `
+        <div style="border-left:3px solid ${sevBorder[f.severity]||'#718096'};background:${sevBg[f.severity]||'#f7fafc'};padding:12px 16px;margin-bottom:8px;border-radius:4px;">
+          <div style="font-weight:700;font-size:14px;margin-bottom:4px;">${sevIcon[f.severity]||''} ${f.title}</div>
+          <div style="font-size:13px;color:#4a5568;white-space:pre-line;">${f.detail}</div>
+        </div>
+      `).join('');
+      html += `<div class="card"><div class="card-title">🔍 ${I18N.t('ai.findings')} (${insights.key_findings.length})</div>${items}</div>`;
+    }
+
+    if (insights.risk_alerts?.length) {
+      const lvlBg = {warning:'#fffaf0', info:'#ebf8ff'};
+      const lvlBorder = {warning:'#fbd38d', info:'#bee3f8'};
+      const items = insights.risk_alerts.map(a => `
+        <div style="padding:10px 14px;margin-bottom:6px;background:${lvlBg[a.level]||'#f7fafc'};border-radius:6px;border:1px solid ${lvlBorder[a.level]||'#e2e8f0'};">
+          <div style="font-weight:600;font-size:13px;">${a.level === 'warning' ? '⚠️' : 'ℹ️'} ${I18N.t(a.level === 'warning' ? 'ai.alertWarning' : 'ai.alertInfo')} ${a.title}</div>
+          <div style="font-size:12px;color:#718096;margin-top:4px;">${a.detail}</div>
+        </div>
+      `).join('');
+      html += `<div class="card"><div class="card-title">🚨 ${I18N.t('ai.alerts')} (${insights.risk_alerts.length})</div>${items}</div>`;
+    }
+
+    if (insights.recommendations?.length) {
+      const items = insights.recommendations.map(r => `
+        <div style="padding:12px 16px;margin-bottom:8px;background:#f0fff4;border-radius:6px;border:1px solid #c6f6d5;">
+          <div style="font-weight:700;font-size:14px;color:#276749;">✅ ${r.title}</div>
+          <div style="font-size:13px;color:#4a5568;margin-top:4px;white-space:pre-line;">${r.detail}</div>
+          <div style="font-size:11px;color:#a0aec0;margin-top:6px;">📂 ${r.category||''}</div>
+        </div>
+      `).join('');
+      html += `<div class="card"><div class="card-title">💡 ${I18N.t('ai.recommendations')} (${insights.recommendations.length})</div>${items}</div>`;
+    }
+
+    if (insights.analysis_angles?.length) {
+      const items = insights.analysis_angles.map(a => `
+        <div style="padding:10px 14px;margin-bottom:6px;background:#faf5ff;border-radius:6px;border:1px solid #e9d8fd;">
+          <div style="font-weight:600;font-size:13px;color:#6b46c1;">📐 ${a.title}</div>
+          <div style="font-size:12px;color:#4a5568;margin-top:4px;">${a.description}</div>
+          <div style="font-size:11px;color:#a0aec0;margin-top:4px;">🔧 ${I18N.t('ai.method')||'方法'}：${a.method||''}</div>
+        </div>
+      `).join('');
+      html += `<div class="card"><div class="card-title">🔬 ${I18N.t('ai.angles')} (${insights.analysis_angles.length})</div>${items}</div>`;
+    }
+
+    const container = document.getElementById('comparisonContent');
+    const targetAnchor = container.querySelector('.card:nth-of-type(2)');
+    if (targetAnchor && html) {
+      targetAnchor.insertAdjacentHTML('afterend', html);
+    }
+  } catch (err) {
+    console.error('AI insights load failed:', err);
+  }
+}
+
+function renderChart(id, type, labels, datasets) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  new Chart(ctx, {
+    type,
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20, font: { size: 12 } } }
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { font: { size: 11 } }, grid: { color: '#e2e8f0' } },
+        x: { ticks: { font: { size: 11 } }, grid: { display: false } }
+      }
+    }
+  });
+}
+
+// 初始化：检查登录状态
+checkAuth();
+
+// 动态计算 header 高度，确保 sticky-tabs 精确吸顶
+(function() {
+  const header = document.querySelector('.header');
+  const stickyTabs = document.querySelector('.sticky-tabs');
+  if (header && stickyTabs) {
+    const setTop = () => { stickyTabs.style.top = header.offsetHeight + 'px'; };
+    setTop();
+    window.addEventListener('resize', setTop);
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>售后数据分析后台</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --primary: #1F4E79;
+  --primary-light: #2E75B6;
+  --bg: #f0f4f8;
+  --card-bg: #fff;
+  --border: #e0e6ed;
+  --text: #2d3748;
+  --text-light: #718096;
+  --success: #38a169;
+  --danger: #e53e3e;
+  --warn: #dd6b20;
+  --shadow: 0 2px 8px rgba(0,0,0,0.08);
+  --radius: 10px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+.header { background: linear-gradient(135deg, var(--primary), var(--primary-light)); color: #fff; padding: 16px 32px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 12px rgba(0,0,0,0.15); }
+.header h1 { font-size: 20px; font-weight: 600; letter-spacing: 1px; }
+.header .subtitle { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+
+.container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+.tabs { display: flex; gap: 4px; margin-bottom: 24px; background: var(--card-bg); border-radius: var(--radius); padding: 4px; box-shadow: var(--shadow); }
+.tab-btn { flex: 1; padding: 12px 24px; border: none; background: transparent; cursor: pointer; font-size: 14px; font-weight: 500; color: var(--text-light); border-radius: 8px; transition: all .2s; }
+.tab-btn.active { background: var(--primary); color: #fff; }
+.tab-btn:hover:not(.active) { background: #edf2f7; }
+
+.card { background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--shadow); padding: 24px; margin-bottom: 20px; }
+.card-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: var(--primary); border-left: 4px solid var(--primary); padding-left: 12px; }
+
+.upload-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 48px; text-align: center; cursor: pointer; transition: all .2s; }
+.upload-zone:hover, .upload-zone.dragover { border-color: var(--primary-light); background: #f7fafc; }
+.upload-zone .icon { font-size: 48px; margin-bottom: 12px; }
+.upload-zone p { color: var(--text-light); font-size: 14px; }
+.upload-zone .hint { font-size: 12px; color: #a0aec0; margin-top: 8px; }
+
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all .2s; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-light); }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-danger:hover { background: #c53030; }
+.btn-success { background: var(--success); color: #fff; }
+.btn-outline { background: #fff; color: var(--primary); border: 1px solid var(--primary); }
+.btn-outline:hover { background: #edf2f7; }
+.btn-sm { padding: 4px 12px; font-size: 12px; }
+
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: var(--card-bg); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); text-align: center; }
+.stat-card .value { font-size: 28px; font-weight: 700; color: var(--primary); }
+.stat-card .label { font-size: 13px; color: var(--text-light); margin-top: 4px; }
+
+.section { margin-bottom: 32px; }
+.section h3 { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: var(--primary); }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 10px 12px; text-align: center; border-bottom: 1px solid var(--border); }
+th { background: var(--primary); color: #fff; font-weight: 500; white-space: nowrap; }
+tr:hover td { background: #f7fafc; }
+tbody tr:last-child td { font-weight: 600; }
+
+.chart-container { position: relative; height: 320px; margin-bottom: 20px; }
+.charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+.month-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.month-card { background: var(--card-bg); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); display: flex; justify-content: space-between; align-items: center; }
+.month-card .info h4 { font-size: 15px; color: var(--primary); }
+.month-card .info .meta { font-size: 12px; color: var(--text-light); margin-top: 4px; }
+.month-card .actions { display: flex; gap: 8px; }
+
+.nested-model { background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+.nested-model h4 { font-size: 14px; color: var(--primary); margin-bottom: 8px; }
+.nested-model table { margin-top: 8px; }
+.nested-model th { background: var(--primary-light); }
+
+.empty-state { text-align: center; padding: 60px; color: var(--text-light); }
+.empty-state .icon { font-size: 64px; margin-bottom: 16px; }
+
+.loading { display: flex; align-items: center; justify-content: center; padding: 40px; color: var(--text-light); }
+.spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; margin-right: 12px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.toast { position: fixed; top: 20px; right: 20px; z-index: 9999; padding: 12px 24px; border-radius: 8px; color: #fff; font-size: 14px; animation: slideIn .3s ease; }
+.toast.success { background: var(--success); }
+.toast.error { background: var(--danger); }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+#fileInput { display: none; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <h1>📊 售后数据分析后台</h1>
+    <div class="subtitle">株式会社 Water X Technologies · 客户投诉部品记录分析系统</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px;font-size:13px;opacity:0.9">🟢 系统运行中</div>
+</div>
+
+<div class="container">
+  <!-- 标签页 -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('upload')">📤 上传分析</button>
+    <button class="tab-btn" onclick="switchTab('monthly')">📋 历月数据</button>
+    <button class="tab-btn" onclick="switchTab('comparison')">📈 多月对比</button>
+  </div>
+
+  <!-- 上传分析页 -->
+  <div id="tab-upload">
+    <div class="card">
+      <div class="card-title">上传月度售后数据</div>
+      <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <div class="icon">📁</div>
+        <p>点击或拖拽 Excel 文件到此处</p>
+        <div class="hint">支持 .xlsx 格式 · 文件名需包含年月（如 202509售后配件记录.xlsx）</div>
+      </div>
+      <input type="file" id="fileInput" accept=".xlsx" onchange="handleFile(event)">
+      <div id="uploadProgress" style="margin-top:12px;display:none;">
+        <div class="loading"><div class="spinner"></div>正在分析数据...</div>
+      </div>
+    </div>
+    <div id="uploadResult"></div>
+  </div>
+
+  <!-- 历月数据页 -->
+  <div id="tab-monthly" style="display:none;">
+    <div class="card">
+      <div class="card-title">已存储月份</div>
+      <div id="monthList" class="month-list"></div>
+    </div>
+    <div id="monthDetail"></div>
+  </div>
+
+  <!-- 多月对比页 -->
+  <div id="tab-comparison" style="display:none;">
+    <div id="comparisonContent"></div>
+    <div id="comparisonDownload" style="text-align:center;margin-top:16px;display:none;">
+      <button class="btn btn-download" onclick="downloadComparison()">📥 下载对比报告 (HTML)</button>
+    </div>
+  </div>
+</div>
+
+<div id="toastContainer"></div>
+
+<script>
+const API = 'http://localhost:5859/api';
+let allResults = null;
+
+// Toast
+function toast(msg, type='success') {
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  document.getElementById('toastContainer').appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+// Tab 切换
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  const tabs = document.querySelectorAll('.tab-btn');
+  tabs.forEach(b => { if (b.textContent.includes({upload:'上传',monthly:'历月',comparison:'对比'}[tab])) b.classList.add('active'); });
+  ['upload','monthly','comparison'].forEach(id => {
+    document.getElementById(`tab-${id}`).style.display = id === tab ? 'block' : 'none';
+  });
+  if (tab === 'monthly') loadMonths();
+  if (tab === 'comparison') loadComparison();
+}
+
+// 拖拽上传
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) uploadFile(file);
+});
+
+function handleFile(e) {
+  const file = e.target.files[0];
+  if (file) uploadFile(file);
+}
+
+async function uploadFile(file) {
+  const progress = document.getElementById('uploadProgress');
+  const result = document.getElementById('uploadResult');
+  progress.style.display = 'block';
+  result.innerHTML = '';
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const res = await fetch(`${API}/upload`, { method: 'POST', body: formData });
+    const data = await res.json();
+    progress.style.display = 'none';
+
+    if (data.error) { toast(data.error, 'error'); return; }
+
+    allResults = data;
+    toast('✅ 分析完成！数据已保存', 'success');
+    renderUploadResult(data);
+  } catch (err) {
+    progress.style.display = 'none';
+    toast('上传失败: ' + err.message, 'error');
+  }
+}
+
+function renderUploadResult(data) {
+  const { summary, results } = data;
+  const r = document.getElementById('uploadResult');
+
+  let html = `
+    <div class="card">
+      <div class="card-title">📊 ${summary.month_label} 汇总指标</div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="value">${summary.total_records}</div><div class="label">总记录数</div></div>
+        <div class="stat-card"><div class="value">¥${summary.total_cost.toLocaleString()}</div><div class="label">总费用</div></div>
+        <div class="stat-card"><div class="value">${summary.in_warranty_count}</div><div class="label">保内件数</div></div>
+        <div class="stat-card"><div class="value">${summary.out_warranty_count}</div><div class="label">保外件数</div></div>
+        <div class="stat-card"><div class="value">${summary.cover_count}</div><div class="label">盖机件数</div></div>
+        <div class="stat-card"><div class="value">${summary.whole_count}</div><div class="label">整机件数</div></div>
+      </div>
+    </div>
+  `;
+
+  // 分析1：保修费用
+  html += renderTable(results.analysis_1, true);
+
+  // 分析2：使用月数
+  html += renderTable(results.analysis_2, true);
+
+  // 分析3：盖机TOP10
+  html += renderTable(results.analysis_3, true);
+
+  // 分析4：盖机保内部品
+  html += renderNested(results.analysis_4);
+
+  // 分析5：盖机部品排序
+  html += renderNested(results.analysis_5);
+
+  // 分析6：整机TOP10
+  html += renderTable(results.analysis_6, true);
+
+  // 分析7：整机保内部品
+  html += renderNested(results.analysis_7);
+
+  // 分析8：整机部品排序
+  html += renderNested(results.analysis_8);
+
+  // 分析9-11：特殊统计
+  [results.analysis_9, results.analysis_10, results.analysis_11].forEach(a => {
+    if (a && a.data) html += renderTable(a, false);
+  });
+
+  // 分析12：座盖使用月数
+  if (results.analysis_12 && results.analysis_12.data) {
+    html += renderTable(results.analysis_12, true);
+  }
+
+  r.innerHTML = html;
+}
+
+function renderTable(analysis, isMultiRow) {
+  if (!analysis || !analysis.data || analysis.data.length === 0) return '';
+  const headers = Object.keys(analysis.data[0]);
+  let rows = '';
+  analysis.data.forEach(r => {
+    rows += '<tr>' + headers.map(h => {
+      let v = r[h];
+      if (typeof v === 'number') v = v.toLocaleString();
+      return `<td>${v ?? '-'}</td>`;
+    }).join('') + '</tr>';
+  });
+
+  return `
+    <div class="section">
+      <h3>${analysis.title}</h3>
+      <div style="overflow-x:auto;"><table>
+        <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table></div>
+    </div>
+  `;
+}
+
+function renderNested(analysis) {
+  if (!analysis || !analysis.data || analysis.data.length === 0) return '';
+  let html = `<div class="section"><h3>${analysis.title}</h3>`;
+
+  analysis.data.forEach(model => {
+    const parts = model['TOP10部品'] || [];
+    if (parts.length === 0) return;
+    const headers = Object.keys(parts[0]);
+    let rows = parts.map(p => '<tr>' + headers.map(h => {
+      let v = p[h]; if (typeof v === 'number') v = v.toLocaleString();
+      return `<td>${v ?? '-'}</td>`;
+    }).join('') + '</tr>').join('');
+
+    html += `
+      <div class="nested-model">
+        <h4>📦 型号: ${model['型号']} （总次数: ${model['总次数']}）</h4>
+        <div style="overflow-x:auto;"><table>
+          <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>
+      </div>
+    `;
+  });
+
+  html += '</div>';
+  return html;
+}
+
+// ========== 历月数据 ==========
+async function loadMonths() {
+  try {
+    const res = await fetch(`${API}/months`);
+    const data = await res.json();
+    renderMonthList(data.months);
+  } catch (err) {
+    toast('加载失败: ' + err.message, 'error');
+  }
+}
+
+function renderMonthList(months) {
+  const el = document.getElementById('monthList');
+  if (!months || months.length === 0) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>暂无数据，请先上传月度报表</p></div>';
+    return;
+  }
+  el.innerHTML = months.map(m => `
+    <div class="month-card">
+      <div class="info">
+        <h4>${m.month_label}</h4>
+        <div class="meta">记录 ${m.total_records} 条 · 总费用 ¥${m.total_cost.toLocaleString()} · 上传于 ${m.created_at?.slice(0,10) || '-'}</div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-outline btn-sm" onclick="viewMonth(${m.id})">查看</button>
+        <button class="btn btn-primary btn-sm" onclick="exportExcel(${m.id})">导出Excel</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteMonth(${m.id})">删除</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function viewMonth(id) {
+  try {
+    const res = await fetch(`${API}/months/${id}`);
+    const detail = await res.json();
+    if (detail.analysis_data) {
+      renderUploadResult({ summary: detail, results: detail.analysis_data });
+      switchTab('upload');
+      document.getElementById('uploadResult').scrollIntoView({ behavior: 'smooth' });
+    }
+  } catch (err) {
+    toast('查看失败: ' + err.message, 'error');
+  }
+}
+
+async function exportExcel(id) {
+  window.open(`${API}/export/${id}`, '_blank');
+}
+
+function downloadComparison() {
+  window.open(`${API}/export/comparison-html`, '_blank');
+  toast('对比报告下载中...');
+}
+
+async function deleteMonth(id) {
+  if (!confirm('确定删除该月份数据？此操作不可撤销。')) return;
+  try {
+    await fetch(`${API}/months/${id}`, { method: 'DELETE' });
+    toast('已删除');
+    loadMonths();
+  } catch (err) {
+    toast('删除失败: ' + err.message, 'error');
+  }
+}
+
+// ========== 多月对比 ==========
+const TREND_COLORS = ['#2E75B6','#e53e3e','#38a169','#d69e2e','#805ad5','#dd6b20','#319795','#d53f8c'];
+
+function buildTrendTable(tbl) {
+  if (!tbl || !tbl.rows || !tbl.rows.length) return '';
+  return `<div style="overflow-x:auto;margin-top:16px;"><table><thead><tr>${
+    tbl.columns.map(c => `<th>${c}</th>`).join('')
+  }</tr></thead><tbody>${
+    tbl.rows.map(r => `<tr><td style="font-weight:600;text-align:left;">${r.label}</td>${
+      r.data.map(v => `<td>${v || 0}</td>`).join('')
+    }</tr>`).join('')
+  }</tbody></table></div>`;
+}
+
+function buildPartsDetailTable(detail) {
+  if (!detail || !detail.models || !detail.models.length) return '';
+  let html = '';
+  for (const modelInfo of detail.models) {
+    html += `<div style="margin-top:16px;"><h4 style="color:#2E75B6;margin-bottom:6px;">型号：${modelInfo.model}</h4>`;
+    html += `<div style="overflow-x:auto;"><table><thead><tr><th>部品</th>${
+      detail.labels.map(l => `<th>${l}</th>`).join('')
+    }</tr></thead><tbody>`;
+    for (const p of modelInfo.parts) {
+      html += `<tr><td style="font-weight:500;">${p.name}</td>${
+        p.data.map(v => `<td>${v || 0}</td>`).join('')
+      }</tr>`;
+    }
+    html += '</tbody></table></div></div>';
+  }
+  return html;
+}
+
+async function loadComparison() {
+  const el = document.getElementById('comparisonContent');
+  try {
+    const res = await fetch(`${API}/comparison`);
+    const data = await res.json();
+    if (!data.labels || data.labels.length === 0) {
+      el.innerHTML = '<div class="card"><div class="empty-state"><div class="icon">📊</div><p>暂无多月数据，需至少上传2个月数据后进行对比</p></div></div>';
+      document.getElementById('comparisonDownload').style.display = 'none';
+      return;
+    }
+    document.getElementById('comparisonDownload').style.display = 'block';
+
+    const trends = data.trends;
+
+    let html = `
+      <div class="card"><div class="card-title">📈 月度总览</div>
+      <div class="charts-row">
+        <div style="height:260px;"><canvas id="chartRecords"></canvas></div>
+        <div style="height:260px;"><canvas id="chartCost"></canvas></div>
+      </div>
+      <div class="charts-row">
+        <div style="height:260px;"><canvas id="chartWarranty"></canvas></div>
+        <div style="height:260px;"><canvas id="chartUnitType"></canvas></div>
+      </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📋 历月数据汇总表</div>
+        <div style="overflow-x:auto;"><table>
+          <thead><tr><th>月份</th><th>总记录数</th><th>总费用(元)</th><th>保内件数</th><th>保外件数</th><th>盖机件数</th><th>整机件数</th><th>保内占比</th></tr></thead>
+          <tbody>${data.details.map(d => `
+            <tr>
+              <td>${d.month_label}</td>
+              <td>${d.total_records}</td>
+              <td>¥${d.total_cost.toLocaleString()}</td>
+              <td>${d.in_warranty_count}</td>
+              <td>${d.out_warranty_count}</td>
+              <td>${d.cover_count}</td>
+              <td>${d.whole_count}</td>
+              <td>${data.in_warranty_ratio[data.details.indexOf(d)]}%</td>
+            </tr>
+          `).join('')}</tbody>
+        </table></div>
+      </div>
+    `;
+
+    // 推移图表 + 表单（至少2个月数据才渲染）
+    if (trends) {
+      html += `
+        <div class="card"><div class="card-title">🔧 保内盖机 TOP10 型号推移</div>
+          <div style="height:320px;"><canvas id="chartCoverTop10"></canvas></div>
+          ${buildTrendTable(trends.cover_top10.table)}
+        </div>
+        <div class="card"><div class="card-title">📦 保内整机 TOP10 型号推移</div>
+          <div style="height:320px;"><canvas id="chartWholeTop10"></canvas></div>
+          ${buildTrendTable(trends.whole_top10.table)}
+        </div>
+        <div class="card"><div class="card-title">🔩 保内盖机 TOP10 部品推移（汇总）</div>
+          <div style="height:320px;"><canvas id="chartCoverParts"></canvas></div>
+          ${buildTrendTable(trends.cover_parts.table)}
+          <div style="margin-top:20px;padding-top:16px;border-top:2px solid #e2e8f0;">
+            <div style="font-weight:700;color:#1F4E79;font-size:15px;margin-bottom:12px;">📊 各型号 TOP10 部品明细</div>
+            ${buildPartsDetailTable(trends.cover_parts_detail)}
+          </div>
+        </div>
+        <div class="card"><div class="card-title">⚙️ 保内整机 TOP10 部品推移（汇总）</div>
+          <div style="height:320px;"><canvas id="chartWholeParts"></canvas></div>
+          ${buildTrendTable(trends.whole_parts.table)}
+          <div style="margin-top:20px;padding-top:16px;border-top:2px solid #e2e8f0;">
+            <div style="font-weight:700;color:#1F4E79;font-size:15px;margin-bottom:12px;">📊 各型号 TOP10 部品明细</div>
+            ${buildPartsDetailTable(trends.whole_parts_detail)}
+          </div>
+        </div>
+        <div class="card"><div class="card-title">🎯 专项投诉推移</div>
+          <div style="height:280px;"><canvas id="chartSpecial"></canvas></div>
+          ${buildTrendTable(trends.special.table)}
+        </div>
+        <div class="card"><div class="card-title">🪑 座盖故障使用月数推移</div>
+          <div style="height:320px;"><canvas id="chartSeatUsage"></canvas></div>
+          ${buildTrendTable(trends.seat_usage.table)}
+        </div>
+      `;
+    }
+
+    el.innerHTML = html;
+
+    // 渲染基础图表
+    setTimeout(() => {
+      renderChart('chartRecords', 'bar', data.labels, [{
+        label: '总记录数', data: data.total_records, backgroundColor: '#2E75B6'
+      }]);
+      renderChart('chartCost', 'line', data.labels, [{
+        label: '总费用(元)', data: data.total_cost, borderColor: '#e53e3e', backgroundColor: 'rgba(229,62,62,0.1)', tension: 0.3, fill: true
+      }]);
+      renderChart('chartWarranty', 'line', data.labels, [{
+        label: '保内占比(%)', data: data.in_warranty_ratio, borderColor: '#38a169', backgroundColor: 'rgba(56,161,105,0.1)', tension: 0.3, fill: true
+      }]);
+      renderChart('chartUnitType', 'bar', data.labels, [
+        { label: '盖机', data: data.details.map(d => d.cover_count), backgroundColor: '#2E75B6' },
+        { label: '整机', data: data.details.map(d => d.whole_count), backgroundColor: '#718096' }
+      ]);
+
+      // 渲染推移图表
+      if (trends) {
+        // 盖机 TOP10 型号
+        renderChart('chartCoverTop10', 'line', trends.cover_top10.labels,
+          trends.cover_top10.datasets.map((ds, i) => ({
+            label: ds.model, data: ds.data, borderColor: TREND_COLORS[i % 8],
+            backgroundColor: 'transparent', tension: 0.3, pointRadius: 3
+          }))
+        );
+        // 整机 TOP10 型号
+        renderChart('chartWholeTop10', 'line', trends.whole_top10.labels,
+          trends.whole_top10.datasets.map((ds, i) => ({
+            label: ds.model, data: ds.data, borderColor: TREND_COLORS[i % 8],
+            backgroundColor: 'transparent', tension: 0.3, pointRadius: 3
+          }))
+        );
+        // 盖机 TOP10 部品
+        renderChart('chartCoverParts', 'line', trends.cover_parts.labels,
+          trends.cover_parts.datasets.map((ds, i) => ({
+            label: ds.part, data: ds.data, borderColor: TREND_COLORS[i % 8],
+            backgroundColor: 'transparent', tension: 0.3, pointRadius: 3
+          }))
+        );
+        // 整机 TOP10 部品
+        renderChart('chartWholeParts', 'line', trends.whole_parts.labels,
+          trends.whole_parts.datasets.map((ds, i) => ({
+            label: ds.part, data: ds.data, borderColor: TREND_COLORS[i % 8],
+            backgroundColor: 'transparent', tension: 0.3, pointRadius: 3
+          }))
+        );
+        // 专项推移
+        renderChart('chartSpecial', 'line', trends.special.labels,
+          trends.special.datasets.map((ds, i) => ({
+            label: ds.label, data: ds.data,
+            borderColor: ['#e53e3e','#d69e2e','#805ad5'][i],
+            backgroundColor: 'transparent', tension: 0.3, pointRadius: 4, borderWidth: 2
+          }))
+        );
+        // 座盖故障使用月数推移
+        renderChart('chartSeatUsage', 'bar', trends.seat_usage.labels,
+          trends.seat_usage.datasets.map((ds, i) => ({
+            label: ds.bucket, data: ds.data, backgroundColor: TREND_COLORS[i % 8]
+          }))
+        );
+      }
+    }, 100);
+
+    // 加载 AI 智能分析
+    loadAIInsights();
+  } catch (err) {
+    el.innerHTML = `<div class="card"><p style="color:var(--danger)">加载失败: ${err.message}</p></div>`;
+  }
+}
+
+async function loadAIInsights() {
+  try {
+    const res = await fetch(`${API}/analysis/insights`);
+    const insights = await res.json();
+    if (!insights.summary && !insights.key_findings?.length) return;
+
+    let html = '';
+
+    // 总体摘要
+    if (insights.summary) {
+      html += `<div class="card" style="background:linear-gradient(135deg,#1a365d,#2a4365);color:#fff;">
+        <div class="card-title" style="color:#bee3f8;border-left-color:#63b3ed;">🤖 AI 智能分析结论</div>
+        <div style="font-size:15px;line-height:1.8;opacity:0.95;">${insights.summary}</div>
+        <div style="font-size:11px;opacity:0.6;margin-top:12px;">生成时间：${insights.generated_at || ''} · AI 自动分析</div>
+      </div>`;
+    }
+
+    // 关键发现
+    if (insights.key_findings?.length) {
+      const sevIcon = {high:'🔴',medium:'🟡',low:'🟢'};
+      const sevBg = {high:'#fff5f5',medium:'#fffff0',low:'#f0fff4'};
+      const sevBorder = {high:'#e53e3e',medium:'#d69e2e',low:'#38a169'};
+      const items = insights.key_findings.map(f => `
+        <div style="border-left:3px solid ${sevBorder[f.severity]||'#718096'};background:${sevBg[f.severity]||'#f7fafc'};padding:12px 16px;margin-bottom:8px;border-radius:4px;">
+          <div style="font-weight:700;font-size:14px;margin-bottom:4px;">${sevIcon[f.severity]||''} ${f.title}</div>
+          <div style="font-size:13px;color:#4a5568;white-space:pre-line;">${f.detail}</div>
+        </div>
+      `).join('');
+      html += `<div class="card"><div class="card-title">🔍 关键发现 (${insights.key_findings.length} 项)</div>${items}</div>`;
+    }
+
+    // 风险预警
+    if (insights.risk_alerts?.length) {
+      const lvlBg = {warning:'#fffaf0', info:'#ebf8ff'};
+      const lvlBorder = {warning:'#fbd38d', info:'#bee3f8'};
+      const lvlLabel = {warning:'⚠️ 预警', info:'ℹ️ 关注'};
+      const items = insights.risk_alerts.map(a => `
+        <div style="padding:10px 14px;margin-bottom:6px;background:${lvlBg[a.level]||'#f7fafc'};border-radius:6px;border:1px solid ${lvlBorder[a.level]||'#e2e8f0'};">
+          <div style="font-weight:600;font-size:13px;">${lvlLabel[a.level]||''} ${a.title}</div>
+          <div style="font-size:12px;color:#718096;margin-top:4px;">${a.detail}</div>
+        </div>
+      `).join('');
+      html += `<div class="card"><div class="card-title">🚨 风险预警 (${insights.risk_alerts.length} 项)</div>${items}</div>`;
+    }
+
+    // 改进建议
+    if (insights.recommendations?.length) {
+      const items = insights.recommendations.map(r => `
+        <div style="padding:12px 16px;margin-bottom:8px;background:#f0fff4;border-radius:6px;border:1px solid #c6f6d5;">
+          <div style="font-weight:700;font-size:14px;color:#276749;">✅ ${r.title}</div>
+          <div style="font-size:13px;color:#4a5568;margin-top:4px;white-space:pre-line;">${r.detail}</div>
+          <div style="font-size:11px;color:#a0aec0;margin-top:6px;">📂 ${r.category||''}</div>
+        </div>
+      `).join('');
+      html += `<div class="card"><div class="card-title">💡 改进建议 (${insights.recommendations.length} 项)</div>${items}</div>`;
+    }
+
+    // 分析角度
+    if (insights.analysis_angles?.length) {
+      const items = insights.analysis_angles.map(a => `
+        <div style="padding:10px 14px;margin-bottom:6px;background:#faf5ff;border-radius:6px;border:1px solid #e9d8fd;">
+          <div style="font-weight:600;font-size:13px;color:#6b46c1;">📐 ${a.title}</div>
+          <div style="font-size:12px;color:#4a5568;margin-top:4px;">${a.description}</div>
+          <div style="font-size:11px;color:#a0aec0;margin-top:4px;">🔧 方法：${a.method||''}</div>
+        </div>
+      `).join('');
+      html += `<div class="card"><div class="card-title">🔬 建议分析角度 (${insights.analysis_angles.length} 项)</div>${items}</div>`;
+    }
+
+    // 插入到对比内容末尾（统计数据表之后、推移图表之前）
+    const container = document.getElementById('comparisonContent');
+    const targetAnchor = container.querySelector('.card:nth-of-type(2)'); // 历月数据汇总表
+    if (targetAnchor && html) {
+      targetAnchor.insertAdjacentHTML('afterend', html);
+    }
+  } catch (err) {
+    console.error('AI insights load failed:', err);
+  }
+}
+
+function renderChart(id, type, labels, datasets) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  new Chart(ctx, {
+    type,
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20, font: { size: 12 } } }
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { font: { size: 11 } }, grid: { color: '#e2e8f0' } },
+        x: { ticks: { font: { size: 11 } }, grid: { display: false } }
+      }
+    }
+  });
+}
+
+// 初始化
+loadMonths();
+</script>
+</body>
+</html>
