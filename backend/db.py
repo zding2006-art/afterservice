@@ -55,6 +55,17 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(year, month)
     );
+
+    CREATE TABLE IF NOT EXISTS knowledge_base (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        year INTEGER NOT NULL,
+        month INTEGER NOT NULL,
+        month_label TEXT NOT NULL,
+        summary_json TEXT NOT NULL,
+        analysis_data_json TEXT NOT NULL,
+        raw_data_json TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
     """)
     # 兼容旧表：如果 raw_data_json 列不存在则添加
     try:
@@ -164,5 +175,73 @@ def get_comparison_data():
 def delete_month(month_id):
     conn = get_db()
     conn.execute("DELETE FROM monthly_summary WHERE id = ?", (month_id,))
+    conn.commit()
+    conn.close()
+
+
+# ══════════════════════════════════════════════════════════
+#  知识库 (knowledge_base) — 独立持久化储存
+#  分析结果存入知识库后，即使删除原始月度数据也不会丢失。
+# ══════════════════════════════════════════════════════════
+
+def kb_save(year, month, month_label, summary, analysis_data, raw_data_json=None):
+    """将分析结果存入知识库，同年月可多次保存（不覆盖，按创建时间区分）。"""
+    conn = get_db()
+    conn.execute("""
+    INSERT INTO knowledge_base
+        (year, month, month_label, summary_json, analysis_data_json, raw_data_json)
+    VALUES (?, ?, ?, ?, ?, ?)
+    """, (
+        year, month, month_label,
+        json.dumps(_to_native(summary), ensure_ascii=False),
+        json.dumps(_to_native(analysis_data), ensure_ascii=False),
+        raw_data_json
+    ))
+    conn.commit()
+    conn.close()
+
+
+def kb_list():
+    """列出知识库中所有条目（仅摘要信息，不含完整分析数据）。"""
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT id, year, month, month_label, summary_json, created_at "
+        "FROM knowledge_base ORDER BY created_at DESC"
+    ).fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["summary"] = json.loads(d.pop("summary_json"))
+        except (json.JSONDecodeError, TypeError):
+            d["summary"] = {}
+        result.append(d)
+    return result
+
+
+def kb_get(kb_id):
+    """获取知识库单条完整数据（含分析数据）。"""
+    conn = get_db()
+    row = conn.execute("SELECT * FROM knowledge_base WHERE id = ?", (kb_id,)).fetchone()
+    conn.close()
+    if not row:
+        return None
+    d = dict(row)
+    try:
+        d["summary"] = json.loads(d.pop("summary_json"))
+    except (json.JSONDecodeError, TypeError):
+        d["summary"] = {}
+    try:
+        d["analysis_data"] = json.loads(d.pop("analysis_data_json"))
+    except (json.JSONDecodeError, TypeError):
+        d["analysis_data"] = {}
+    return d
+
+
+def kb_delete(kb_id):
+    """删除知识库中的一条记录。"""
+    conn = get_db()
+    conn.execute("DELETE FROM knowledge_base WHERE id = ?", (kb_id,))
     conn.commit()
     conn.close()

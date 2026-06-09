@@ -23,6 +23,7 @@ from analyzer import _df_to_json, run_all_analysis
 from db import (
     delete_month, get_all_months, get_comparison_data,
     get_month_detail, init_db, save_monthly, _to_native,
+    kb_save, kb_list, kb_get, kb_delete,
 )
 from insights import generate_insights
 from services.export_excel import build_monthly_excel
@@ -35,6 +36,14 @@ import db as _db_module
 app = Flask(__name__, static_folder=config.STATIC_DIR, static_url_path="")
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 app.secret_key = config.SECRET_KEY
+
+# ── Session 配置：确保浏览器正确携带 session cookie ──
+app.config.update(
+    SESSION_COOKIE_SAMESITE="Lax",       # 同站请求携带 cookie（fetch 兼容）
+    SESSION_COOKIE_HTTPONLY=True,        # 禁止 JS 读取 cookie（安全）
+    SESSION_COOKIE_SECURE=False,         # HTTP 环境下无需 Secure（生产 HTTPS 时改为 True）
+)
+app.permanent_session_lifetime = 86400  # 24 小时
 
 # 同步 db 模块使用统一配置的数据库路径
 _db_module.DB_PATH = config.DB_PATH
@@ -301,6 +310,67 @@ def export_comparison_html():
         download_name=f"售后多月对比报告_{datetime.now().strftime('%Y%m%d')}.html",
         mimetype="text/html; charset=utf-8",
     )
+
+
+# ══════════════════════════════════════════════════════════
+#  知识库 API
+# ══════════════════════════════════════════════════════════
+
+@app.route("/api/knowledge/save", methods=["POST"])
+@login_required
+def kb_save_entry():
+    """将指定月份的分析结果存入知识库（独立于月度数据，删除源数据后依然保留）。"""
+    payload = request.get_json()
+    if not payload:
+        return jsonify({"error": "无数据"}), 400
+
+    year = payload.get("year")
+    month = payload.get("month")
+    month_label = payload.get("month_label")
+    summary = payload.get("summary")
+    analysis_data = payload.get("analysis_data")
+    raw_data_json = payload.get("raw_data_json")
+
+    # ── 诊断日志 ──
+    app.logger.info(f"[KB SAVE] 收到保存请求: year={year}, month={month}, month_label={month_label}, "
+                    f"records={summary.get('total_records') if summary else 'N/A'}, "
+                    f"cost={summary.get('total_cost') if summary else 'N/A'}")
+
+    if not all([year, month, month_label, summary, analysis_data]):
+        return jsonify({"error": "参数不完整"}), 400
+
+    try:
+        kb_save(year, month, month_label, summary, analysis_data, raw_data_json)
+        app.logger.info(f"[KB SAVE] 保存成功: {month_label}")
+        return jsonify({"success": True, "month_label": month_label})
+    except Exception as e:
+        app.logger.error(f"[KB SAVE] 保存失败: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/knowledge/list", methods=["GET"])
+@login_required
+def kb_list_entries():
+    """列出知识库中所有条目（仅摘要信息）。"""
+    return jsonify({"entries": kb_list()})
+
+
+@app.route("/api/knowledge/<int:kb_id>", methods=["GET"])
+@login_required
+def kb_get_entry(kb_id):
+    """获取知识库单条完整数据。"""
+    entry = kb_get(kb_id)
+    if not entry:
+        return jsonify({"error": "未找到"}), 404
+    return jsonify(entry)
+
+
+@app.route("/api/knowledge/<int:kb_id>", methods=["DELETE"])
+@login_required
+def kb_delete_entry(kb_id):
+    """删除知识库中的一条记录。"""
+    kb_delete(kb_id)
+    return jsonify({"success": True})
 
 
 # ══════════════════════════════════════════════════════════

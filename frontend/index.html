@@ -209,7 +209,7 @@ tbody tr:last-child td { font-weight: 600; }
       <button class="lang-btn" data-lang="ja" onclick="switchLang('ja')">日</button>
     </div>
     <div style="text-align:right;">
-      <div style="font-size:12px;font-weight:700;background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.35);border-radius:6px;padding:3px 10px;letter-spacing:0.5px;color:#fff;"><span data-i18n="app.version">Version 1.0</span></div>
+      <div style="font-size:12px;font-weight:700;background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.35);border-radius:6px;padding:3px 10px;letter-spacing:0.5px;color:#fff;"><span data-i18n="app.version">Version 1.2</span></div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;font-size:13px;opacity:0.9">🟢 <span data-i18n="app.running">系统运行中</span></div>
     <button class="btn btn-sm" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);" onclick="doLogout()" data-i18n="login.logout">退出登录</button>
@@ -222,6 +222,7 @@ tbody tr:last-child td { font-weight: 600; }
     <button class="tab-btn active" data-i18n="tab.upload" onclick="switchTab('upload')">📤 上传分析</button>
     <button class="tab-btn" data-i18n="tab.monthly" onclick="switchTab('monthly')">📋 各月数据分析</button>
     <button class="tab-btn" data-i18n="tab.comparison" onclick="switchTab('comparison')">📈 多月对比</button>
+    <button class="tab-btn" data-i18n="tab.knowledge" onclick="switchTab('knowledge')">📚 知识库</button>
   </div>
   </div>
 </div>
@@ -261,6 +262,15 @@ tbody tr:last-child td { font-weight: 600; }
       <button class="btn btn-download" onclick="downloadComparison()">📥 <span data-i18n="comparison.download">下载对比报告 (HTML)</span></button>
     </div>
   </div>
+
+  <!-- 知识库页 -->
+  <div id="tab-knowledge" style="display:none;">
+    <div class="card">
+      <div class="card-title" data-i18n="kb.title">分析知识库</div>
+      <div id="kbList" class="month-list"></div>
+    </div>
+    <div id="kbDetail"></div>
+  </div>
 </div>
 
 <div id="toastContainer"></div>
@@ -269,7 +279,7 @@ tbody tr:last-child td { font-weight: 600; }
 <div class="footer">
   <div class="company" data-i18n="footer.company">株式会社 Water X Technologies</div>
   <div class="tagline" data-i18n="footer.tagline">制造产业和AI的融合 · Manufacturing × Artificial Intelligence</div>
-  <div class="meta"><span data-i18n="footer.copyright">售后数据分析系统 Version 1.0</span> &nbsp;|&nbsp; <span data-i18n="footer.rights">© 2026 Water X Technologies. All rights reserved.</span> &nbsp;|&nbsp; <span data-i18n="footer.released">Released: 2026年5月</span></div>
+  <div class="meta"><span data-i18n="footer.copyright">售后数据分析系统 Version 1.2</span> &nbsp;|&nbsp; <span data-i18n="footer.rights">© 2026 Water X Technologies. All rights reserved.</span> &nbsp;|&nbsp; <span data-i18n="footer.released">Released: 2026年5月</span></div>
 </div>
 
 </div><!-- /appMain -->
@@ -281,12 +291,18 @@ tbody tr:last-child td { font-weight: 600; }
 const API = (function(){
   const proto = window.location.protocol;
   const host = window.location.hostname;
-  if (proto === 'file:' || host === 'localhost' || host === '127.0.0.1' || host === '') {
+  const port = window.location.port;
+  // file:// 协议或本地开发环境：使用当前页面相同的 host，避免 SameSite cookie 问题
+  if (proto === 'file:') {
     return 'http://localhost:5859/api';
+  }
+  if (host === 'localhost' || host === '127.0.0.1' || host === '') {
+    return `${proto}//${host}${port ? ':' + port : ''}/api`;
   }
   return '/api';
 })();
-let allResults = null;
+let allResults = null;           // 最后一个上传结果（用于调试/日志等）
+let currentDisplayedData = null; // 当前正在显示的上传/分析数据（saveToKB 用这个）
 
 // ===== 工具函数 =====
 
@@ -384,9 +400,11 @@ function switchLang(lang) {
   if (activeTab) {
     const tabName = activeTab.textContent.includes(I18N.t('tab.upload')) ? 'upload'
       : activeTab.textContent.includes(I18N.t('tab.monthly')) ? 'monthly'
-      : 'comparison';
+      : activeTab.textContent.includes(I18N.t('tab.comparison')) ? 'comparison'
+      : 'knowledge';
     if (tabName === 'monthly') loadMonths();
     if (tabName === 'comparison') loadComparison();
+    if (tabName === 'knowledge') loadKB();
   }
 }
 
@@ -404,15 +422,16 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   const tabs = document.querySelectorAll('.tab-btn');
   // 通过 data-i18n key 识别 tab
-  const tabKeys = { upload:'tab.upload', monthly:'tab.monthly', comparison:'tab.comparison' };
+  const tabKeys = { upload:'tab.upload', monthly:'tab.monthly', comparison:'tab.comparison', knowledge:'tab.knowledge' };
   tabs.forEach(b => {
     if (b.getAttribute('data-i18n') === tabKeys[tab]) b.classList.add('active');
   });
-  ['upload','monthly','comparison'].forEach(id => {
+  ['upload','monthly','comparison','knowledge'].forEach(id => {
     document.getElementById(`tab-${id}`).style.display = id === tab ? 'block' : 'none';
   });
   if (tab === 'monthly') loadMonths();
   if (tab === 'comparison') loadComparison();
+  if (tab === 'knowledge') loadKB();
 }
 
 // 拖拽上传
@@ -447,7 +466,9 @@ async function uploadFile(file) {
 
     if (data.error) { toast(data.error, 'error'); return; }
 
+
     allResults = data;
+    currentDisplayedData = data;  // saveToKB 从这里读取
 
     if (data.is_multi_month) {
       // ===== 多月份上传 =====
@@ -634,7 +655,7 @@ function showOverwriteConfirm(existsList, resultsMap) {
   };
 }
 
-function renderUploadResult(data) {
+function renderUploadResult(data, isKBView = false) {
   // 翻译结果标题和列名
   const translatedResults = I18N.translateResults(data.results || {});
   const translatedSummary = I18N.translateSummary(data.summary || {});
@@ -683,6 +704,16 @@ function renderUploadResult(data) {
   // 分析13：所有产品使用月数汇总
   if (results.analysis_13 && results.analysis_13.data) {
     html += renderTable(results.analysis_13, true);
+  }
+
+  // 保存到知识库按钮（KB 查看时不显示）
+  if (!isKBView) {
+    html += `
+      <div class="card" style="text-align:center;padding:16px 24px;background:#f0f7ff;border:1px solid #bee3f8;">
+        <span style="color:#2b6cb0;font-size:14px;margin-right:12px;">💡 ${I18N.t('kb.saveHint')}</span>
+        <button class="btn btn-primary" onclick="saveToKB()">📚 ${I18N.t('kb.saveBtn')}</button>
+      </div>
+    `;
   }
 
   r.innerHTML = html;
@@ -756,9 +787,9 @@ function renderMultiMonthResult(data) {
   const r = document.getElementById('uploadResult');
   const costSymbol = I18N.t('summary.costUnit');
 
-      // 翻译（在 multi-month 中替换 summary/results）
-      data.results = I18N.translateResults(results || {});
-      data.summary = I18N.translateSummary(summary || {});
+  // 翻译 summary 和 results（不复写原始 data 对象）
+  const translatedSummary = I18N.translateSummary(summary || {});
+  const translatedResults = I18N.translateResults(results || {});
 
   let html = `
     <div class="card" style="background:linear-gradient(135deg,#1a365d,#2a4365);color:#fff;">
@@ -820,7 +851,7 @@ function renderMultiMonthResult(data) {
   r.innerHTML = html;
 
   // 继续渲染详细分析表格（使用已翻译的 results）
-  const tResults = data.results;
+  const tResults = translatedResults;
   const detailHtml = [
     renderTable(tResults.analysis_1, true),
     renderTable(tResults.analysis_2, true),
@@ -838,6 +869,16 @@ function renderMultiMonthResult(data) {
   const detailEl = document.createElement('div');
   detailEl.innerHTML = detailHtml;
   r.appendChild(detailEl);
+
+  // 保存到知识库按钮（多月模式）
+  const kbDiv = document.createElement('div');
+  kbDiv.innerHTML = `
+    <div class="card" style="text-align:center;padding:16px 24px;background:#f0f7ff;border:1px solid #bee3f8;margin-top:16px;">
+      <span style="color:#2b6cb0;font-size:14px;margin-right:12px;">💡 ${I18N.t('kb.saveMultiHint')}</span>
+      <button class="btn btn-primary" onclick="saveMultiToKB()">📚 ${I18N.t('kb.saveAllBtn')}</button>
+    </div>
+  `;
+  r.appendChild(kbDiv);
 }
 
 // ========== 历月数据 ==========
@@ -878,7 +919,8 @@ async function viewMonth(id) {
     const res = await _f(`/months/${id}`);
     const detail = await res.json();
     if (detail.analysis_data) {
-      renderUploadResult({ summary: detail, results: detail.analysis_data });
+      currentDisplayedData = { summary: detail, results: detail.analysis_data };  // saveToKB 需要
+      renderUploadResult(currentDisplayedData);
       switchTab('upload');
       document.getElementById('uploadResult').scrollIntoView({ behavior: 'smooth' });
     }
@@ -904,6 +946,195 @@ async function deleteMonth(id) {
     loadMonths();
   } catch (err) {
     toast(I18N.t('toast.deleteFail') + ': ' + err.message, 'error');
+  }
+}
+
+// ========== 知识库 ==========
+
+/** 保存当前上传分析结果到知识库 */
+async function saveToKB() {
+  // 如果是从知识库查看触发的，不应该有保存按钮，但做一层防护
+  if (!currentDisplayedData || currentDisplayedData._isKBView) {
+    toast(I18N.t('kb.saveNoData'), 'error');
+    return;
+  }
+
+  const data = currentDisplayedData;
+  const summary = data.summary || {};
+  const results = data.results || {};
+
+  // ── 诊断日志 ──
+  console.log('[saveToKB] currentDisplayedData.summary:', JSON.stringify({year: summary.year, month: summary.month, month_label: summary.month_label, total_records: summary.total_records}));
+  console.log('[saveToKB] currentDisplayedData._isKBView:', data._isKBView);
+  console.log('[saveToKB] allResults.summary:', allResults ? JSON.stringify({year: allResults.summary?.year, month: allResults.summary?.month, label: allResults.summary?.month_label}) : 'null');
+
+  if (!summary.year || !summary.month) {
+    toast(I18N.t('kb.saveNoYear'), 'error');
+    return;
+  }
+
+  // ── 保存前确认：让用户看到即将保存的月份 ──
+  const confirmLabel = summary.month_label || `${summary.year}-${String(summary.month).padStart(2, '0')}`;
+  if (!_confirm(`${I18N.t('kb.saveConfirmTitle')}\n\n📅 ${confirmLabel}\n📊 ${I18N.t('summary.totalRecords')}：${summary.total_records || 0}\n💰 ${I18N.t('summary.totalCost')}：¥${(summary.total_cost || 0).toLocaleString()}\n\n${I18N.t('kb.saveConfirmHint')}`)) {
+    return;
+  }
+
+  // ── 重复性检测：检查知识库中是否已有同年月的条目 ──
+  try {
+    const listRes = await _f('/knowledge/list');
+    const listData = await listRes.json();
+    const existing = (listData.entries || []).filter(
+      e => e.year === summary.year && e.month === summary.month
+    );
+    if (existing.length > 0) {
+      if (!_confirm(
+        `${I18N.t('kb.duplicateWarn')}\n\n` +
+        `${I18N.t('kb.existingCount')}：${existing.length} ${I18N.t('kb.existingUnit')}\n` +
+        `${I18N.t('kb.duplicateConfirm')}`
+      )) {
+        return;
+      }
+    }
+  } catch {
+    // 查询失败不阻塞保存
+  }
+
+  try {
+    const payload = {
+      year: summary.year,
+      month: summary.month,
+      month_label: summary.month_label || '',
+      summary: summary,
+      analysis_data: results,
+      raw_data_json: data.raw_data_json || null
+    };
+
+    console.log('[saveToKB] Sending payload:', JSON.stringify({year: payload.year, month: payload.month, month_label: payload.month_label, records: payload.summary?.total_records}));
+
+    const res = await _f('/knowledge/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const d = await res.json();
+    if (d.error) { toast(d.error, 'error'); return; }
+    toast(`✅ ${d.month_label || ''} ${I18N.t('kb.saved')}`, 'success');
+
+    // 保存后立即刷新知识库列表
+    loadKB();
+  } catch (e) {
+    toast(I18N.t('kb.saveFail') + ': ' + e.message, 'error');
+  }
+}
+
+/** 保存多月上传的分析结果到知识库（逐月保存） */
+async function saveMultiToKB() {
+  if (!currentDisplayedData || !currentDisplayedData.is_multi_month) {
+    toast(I18N.t('kb.saveNoData'), 'error');
+    return;
+  }
+
+  const data = currentDisplayedData;
+  const monthDetails = data.month_details || [];
+  if (monthDetails.length === 0) {
+    toast(I18N.t('kb.saveNoData'), 'error');
+    return;
+  }
+
+  let ok = 0, fail = 0;
+  for (const md of monthDetails) {
+    try {
+      const payload = {
+        year: md.year,
+        month: md.month,
+        month_label: md.month_label,
+        summary: md.summary,
+        analysis_data: md.results,
+        raw_data_json: md.raw_data_json || null
+      };
+      const res = await _f('/knowledge/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const d = await res.json();
+      d.error ? fail++ : ok++;
+    } catch { fail++; }
+  }
+  toast(fail === 0
+    ? `✅ ${ok} ${I18N.t('kb.allSaved')}`
+    : `⚠️ ${I18N.t('kb.partialSaved')}：${ok} ${I18N.t('toast.success')}，${fail} ${I18N.t('toast.fail')}`,
+    fail === 0 ? 'success' : 'error');
+  loadKB();
+}
+
+/** 加载知识库列表 */
+async function loadKB() {
+  try {
+    const res = await _f('/knowledge/list');
+    const data = await res.json();
+    renderKBList(data.entries || []);
+  } catch (err) {
+    toast(I18N.t('toast.loadFail') + ': ' + err.message, 'error');
+  }
+}
+
+/** 渲染知识库列表 */
+function renderKBList(entries) {
+  const el = document.getElementById('kbList');
+  const costSymbol = I18N.t('summary.costUnit');
+  if (!entries || entries.length === 0) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">📚</div><p>${I18N.t('kb.empty')}</p></div>`;
+    return;
+  }
+  el.innerHTML = entries.map(e => {
+    const s = e.summary || {};
+    return `
+    <div class="month-card">
+      <div class="info">
+        <h4>${e.month_label}</h4>
+        <div class="meta">
+          ${I18N.t('monthly.records')} ${s.total_records || '-'} · ${I18N.t('summary.totalCost')} ${costSymbol}${(s.total_cost || 0).toLocaleString()} · ${I18N.t('kb.savedAt')} ${e.created_at?.slice(0,16) || '-'}
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-outline btn-sm" onclick="viewKB(${e.id})">${I18N.t('monthly.view')}</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteKB(${e.id})">${I18N.t('monthly.delete')}</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/** 查看知识库条目详情 */
+async function viewKB(id) {
+  try {
+    const res = await _f(`/knowledge/${id}`);
+    const entry = await res.json();
+    if (entry.analysis_data) {
+      // 用 currentDisplayedData 携带 KB 标记，避免 saveToKB 误用
+      currentDisplayedData = {
+        summary: entry.summary || {},
+        results: entry.analysis_data,
+        _isKBView: true
+      };
+      renderUploadResult(currentDisplayedData, true);
+      switchTab('upload');
+      document.getElementById('uploadResult').scrollIntoView({ behavior: 'smooth' });
+    }
+  } catch (err) {
+    toast(I18N.t('toast.viewFail') + ': ' + err.message, 'error');
+  }
+}
+
+/** 删除知识库条目 */
+async function deleteKB(id) {
+  if (!_confirm(I18N.t('kb.deleteConfirm'))) return;
+  try {
+    await _f(`/knowledge/${id}`, { method: 'DELETE' });
+    toast(I18N.t('kb.deleted'));
+    loadKB();
+  } catch (err) {
+    toast(I18N.t('kb.deleteFail') + ': ' + err.message, 'error');
   }
 }
 
